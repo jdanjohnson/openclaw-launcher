@@ -110,18 +110,24 @@ function resolveOpenClawBin() {
     "/usr/bin/openclaw",
   ];
 
-  // Also check other users' npm-global dirs (e.g. installed as different user)
-  try {
-    const homes = fs.readdirSync("/home");
-    for (const h of homes) {
-      candidates.push(path.join("/home", h, ".npm-global", "bin", "openclaw"));
-    }
-  } catch { /* /home not readable, skip */ }
+  // Also check the dedicated 'openclaw' system user's install path
+  // (the official installer may create this user)
+  candidates.push("/home/openclaw/.npm-global/bin/openclaw");
 
   for (const candidate of candidates) {
     try {
       fs.accessSync(candidate, fs.constants.X_OK);
-      return candidate;
+      // Verify the binary is owned by root or current user to prevent
+      // untrusted binary execution from other users' home dirs
+      const stat = fs.statSync(candidate);
+      if (stat.uid === 0 || stat.uid === process.getuid()) {
+        return candidate;
+      }
+      // Allow binaries owned by the 'openclaw' system user
+      try {
+        const ownerName = execFileSync("stat", ["-c", "%U", candidate], { encoding: "utf8" }).trim();
+        if (ownerName === "openclaw") return candidate;
+      } catch { /* stat failed, skip this candidate */ }
     } catch { /* not found or not executable */ }
   }
 
