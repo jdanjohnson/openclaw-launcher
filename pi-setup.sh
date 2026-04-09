@@ -7,7 +7,6 @@ set -euo pipefail
 
 REPO_URL="https://github.com/jdanjohnson/openclaw-launcher.git"
 INSTALL_DIR="$HOME/openclaw-launcher"
-NODE_MAJOR=20
 
 echo ""
 echo "  ╔══════════════════════════════════════════╗"
@@ -37,37 +36,60 @@ sudo apt-get install -y -qq git curl avahi-daemon > /dev/null 2>&1
 echo "         Done."
 
 # ------------------------------------------------------------------
-# 3. Node.js (via NodeSource)
+# 3. OpenClaw CLI (official installer — handles Node.js automatically)
 # ------------------------------------------------------------------
-if command -v node &> /dev/null; then
-  NODE_VER=$(node -v)
-  echo "  [2/6] Node.js already installed: $NODE_VER"
-else
-  echo "  [2/6] Installing Node.js $NODE_MAJOR..."
-  curl -fsSL https://deb.nodesource.com/setup_${NODE_MAJOR}.x | sudo -E bash - > /dev/null 2>&1
-  sudo apt-get install -y -qq nodejs > /dev/null 2>&1
-  echo "         Installed: $(node -v)"
-fi
+# The official installer detects the OS, installs/upgrades Node.js if
+# needed, and installs the openclaw CLI under ~/.npm-global/bin/.
+OPENCLAW_BIN=""
 
-# ------------------------------------------------------------------
-# 4. OpenClaw CLI
-# ------------------------------------------------------------------
+# Check if openclaw is already available
 if command -v openclaw &> /dev/null; then
-  echo "  [3/6] OpenClaw CLI already installed."
+  echo "  [2/6] OpenClaw CLI already installed: $(openclaw --version 2>/dev/null || echo 'unknown')"
+  OPENCLAW_BIN="$(command -v openclaw)"
+elif [ -x "$HOME/.npm-global/bin/openclaw" ]; then
+  echo "  [2/6] OpenClaw CLI found at ~/.npm-global/bin/openclaw"
+  OPENCLAW_BIN="$HOME/.npm-global/bin/openclaw"
 else
-  echo "  [3/6] Installing OpenClaw CLI..."
-  if npm list -g openclaw &> /dev/null; then
-    echo "         Already in global npm."
-  else
-    sudo npm install -g openclaw 2>/dev/null || {
-      echo "         Warning: Could not install openclaw globally."
-      echo "         The launcher will run in demo mode."
-    }
+  echo "  [2/6] Installing OpenClaw CLI (this may take a few minutes)..."
+  echo "         Using the official installer from https://openclaw.ai/install.sh"
+  echo ""
+  curl -fsSL https://openclaw.ai/install.sh | bash -s -- --no-onboard 2>&1 | while IFS= read -r line; do
+    echo "         $line"
+  done || {
+    echo ""
+    echo "         Warning: OpenClaw installer failed."
+    echo "         The launcher will run in demo mode."
+    echo "         You can install manually later:"
+    echo "           curl -fsSL https://openclaw.ai/install.sh | bash"
+  }
+
+  # Check where it was installed
+  if command -v openclaw &> /dev/null; then
+    OPENCLAW_BIN="$(command -v openclaw)"
+  elif [ -x "$HOME/.npm-global/bin/openclaw" ]; then
+    OPENCLAW_BIN="$HOME/.npm-global/bin/openclaw"
   fi
 fi
 
+if [ -n "$OPENCLAW_BIN" ]; then
+  echo "         OpenClaw binary: $OPENCLAW_BIN"
+else
+  echo "         OpenClaw not found — launcher will run in demo mode."
+fi
+
+# Ensure Node.js is available (the OpenClaw installer installs it,
+# but if it was skipped we need it for the launcher)
+if ! command -v node &> /dev/null; then
+  echo "  [3/6] Installing Node.js..."
+  curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - > /dev/null 2>&1
+  sudo apt-get install -y -qq nodejs > /dev/null 2>&1
+  echo "         Installed: $(node -v)"
+else
+  echo "  [3/6] Node.js already installed: $(node -v)"
+fi
+
 # ------------------------------------------------------------------
-# 5. Clone / update the launcher repo
+# 4. Clone / update the launcher repo
 # ------------------------------------------------------------------
 if [ -d "$INSTALL_DIR/.git" ]; then
   echo "  [4/6] Updating launcher..."
@@ -80,7 +102,7 @@ else
 fi
 
 # ------------------------------------------------------------------
-# 6. Install dependencies & build UI
+# 5. Install dependencies & build UI
 # ------------------------------------------------------------------
 echo "  [5/6] Installing dependencies & building UI..."
 npm install --omit=dev 2>/dev/null
@@ -91,9 +113,22 @@ cd ..
 echo "         Done."
 
 # ------------------------------------------------------------------
-# 7. Create systemd service
+# 6. Create systemd service
 # ------------------------------------------------------------------
 echo "  [6/6] Creating systemd service..."
+
+# Build the PATH for the service — include common openclaw install locations
+SERVICE_PATH="/usr/local/bin:/usr/bin:/bin"
+if [ -d "$HOME/.npm-global/bin" ]; then
+  SERVICE_PATH="$HOME/.npm-global/bin:$SERVICE_PATH"
+fi
+# Also include other users' npm-global dirs in case openclaw was installed
+# by a different user (e.g. a setup/deploy user)
+for dir in /home/*/.npm-global/bin; do
+  if [ -d "$dir" ]; then
+    SERVICE_PATH="$dir:$SERVICE_PATH"
+  fi
+done
 
 SERVICE_FILE="/etc/systemd/system/openclaw-launcher.service"
 sudo tee "$SERVICE_FILE" > /dev/null <<EOF
@@ -111,6 +146,7 @@ Restart=on-failure
 RestartSec=5
 Environment=PORT=3000
 Environment=HOME=$HOME
+Environment=PATH=$SERVICE_PATH
 
 [Install]
 WantedBy=multi-user.target
@@ -118,11 +154,11 @@ EOF
 
 sudo systemctl daemon-reload
 sudo systemctl enable openclaw-launcher
-sudo systemctl start openclaw-launcher
+sudo systemctl restart openclaw-launcher
 echo "         Service started."
 
 # ------------------------------------------------------------------
-# 8. Set up mDNS hostname
+# 7. Set up mDNS hostname
 # ------------------------------------------------------------------
 CURRENT_HOSTNAME=$(hostname)
 if [ "$CURRENT_HOSTNAME" != "myagent" ]; then
@@ -157,6 +193,18 @@ echo "    http://$IP_ADDR:3000"
 echo "    http://$(hostname).local:3000"
 echo ""
 echo "  Open that URL in a browser to start onboarding."
+echo ""
+if [ -n "$OPENCLAW_BIN" ]; then
+  echo "  OpenClaw CLI: $OPENCLAW_BIN"
+  echo "  Mode: LIVE (real agent commands)"
+else
+  echo "  OpenClaw CLI: not installed"
+  echo "  Mode: DEMO (simulated responses)"
+  echo ""
+  echo "  To install OpenClaw and switch to live mode:"
+  echo "    curl -fsSL https://openclaw.ai/install.sh | bash"
+  echo "    sudo systemctl restart openclaw-launcher"
+fi
 echo ""
 echo "  Useful commands:"
 echo "    sudo systemctl status openclaw-launcher"

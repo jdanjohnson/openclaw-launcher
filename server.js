@@ -93,10 +93,49 @@ function httpsGet(url, timeoutMs = 10000) {
   });
 }
 
+// Resolve the full path to the openclaw binary.
+// The official installer places it under ~/.npm-global/bin, which may not
+// be on PATH when running as a systemd service.
+function resolveOpenClawBin() {
+  // 1. Check if it's already on PATH
+  const whichResult = runSafeCommand("which", ["openclaw"]);
+  if (whichResult.success) return whichResult.output.trim();
+
+  // 2. Search common install locations
+  const homeDir = process.env.HOME || "/home";
+  const candidates = [
+    path.join(homeDir, ".npm-global", "bin", "openclaw"),
+    "/usr/local/bin/openclaw",
+    "/usr/bin/openclaw",
+  ];
+
+  // Also check other users' npm-global dirs (e.g. installed as different user)
+  try {
+    const homes = fs.readdirSync("/home");
+    for (const h of homes) {
+      candidates.push(path.join("/home", h, ".npm-global", "bin", "openclaw"));
+    }
+  } catch { /* /home not readable, skip */ }
+
+  for (const candidate of candidates) {
+    try {
+      fs.accessSync(candidate, fs.constants.X_OK);
+      return candidate;
+    } catch { /* not found or not executable */ }
+  }
+
+  return null;
+}
+
+// Cache the resolved binary path (re-resolved on each server start)
+let openclawBin = resolveOpenClawBin();
+
 // Check if OpenClaw CLI is available
 function isOpenClawInstalled() {
-  const result = runSafeCommand("which", ["openclaw"]);
-  return result.success;
+  if (openclawBin) return true;
+  // Re-check in case it was installed after server start
+  openclawBin = resolveOpenClawBin();
+  return !!openclawBin;
 }
 
 // -------------------------------------------------------------------
@@ -110,7 +149,7 @@ app.get("/api/status", (_req, res) => {
 
   let gatewayRunning = false;
   if (clawInstalled) {
-    const statusResult = runSafeCommand("openclaw", ["status"]);
+    const statusResult = runSafeCommand(openclawBin || "openclaw", ["status"]);
     gatewayRunning =
       statusResult.success &&
       statusResult.output.toLowerCase().includes("running");
@@ -265,7 +304,7 @@ app.post("/api/setup/api-key", (req, res) => {
 
   // Configure via OpenClaw CLI if available
   if (isOpenClawInstalled()) {
-    runSafeCommand("openclaw", [
+    runSafeCommand(openclawBin || "openclaw", [
       "models",
       "auth",
       "paste-token",
@@ -358,7 +397,7 @@ app.post("/api/setup/telegram", async (req, res) => {
 
   // Add channel via CLI if available
   if (isOpenClawInstalled()) {
-    runSafeCommand("openclaw", [
+    runSafeCommand(openclawBin || "openclaw", [
       "channels",
       "add",
       "--channel",
@@ -370,13 +409,13 @@ app.post("/api/setup/telegram", async (req, res) => {
     if (userId && userId.trim().length > 0) {
       const safeUserId = userId.trim().replace(/[^0-9]/g, "");
       if (safeUserId.length > 0) {
-        runSafeCommand("openclaw", [
+        runSafeCommand(openclawBin || "openclaw", [
           "config",
           "set",
           "channels.telegram.dmPolicy",
           "allowlist",
         ]);
-        runSafeCommand("openclaw", [
+        runSafeCommand(openclawBin || "openclaw", [
           "config",
           "set",
           "channels.telegram.allowFrom",
@@ -402,13 +441,13 @@ app.post("/api/setup/telegram", async (req, res) => {
 app.post("/api/activate", (_req, res) => {
   if (isOpenClawInstalled()) {
     // Try to restart the gateway
-    runSafeCommand("openclaw", ["restart"]);
+    runSafeCommand(openclawBin || "openclaw", ["restart"]);
 
     // Give it a moment to start, then re-load fresh state
     setTimeout(() => {
       try {
         const state = loadState();
-        const statusResult = runSafeCommand("openclaw", ["status"]);
+        const statusResult = runSafeCommand(openclawBin || "openclaw", ["status"]);
         const running =
           statusResult.success &&
           statusResult.output.toLowerCase().includes("running");
@@ -455,16 +494,16 @@ app.post("/api/gateway/toggle", (req, res) => {
 
   if (isOpenClawInstalled()) {
     if (action === "start") {
-      runSafeCommand("openclaw", ["restart"]);
+      runSafeCommand(openclawBin || "openclaw", ["restart"]);
     } else {
-      runSafeCommand("openclaw", ["stop"]);
+      runSafeCommand(openclawBin || "openclaw", ["stop"]);
     }
 
     // Re-load fresh state after the delay to avoid overwriting concurrent changes
     setTimeout(() => {
       try {
         const state = loadState();
-        const statusResult = runSafeCommand("openclaw", ["status"]);
+        const statusResult = runSafeCommand(openclawBin || "openclaw", ["status"]);
         const running =
           statusResult.success &&
           statusResult.output.toLowerCase().includes("running");
