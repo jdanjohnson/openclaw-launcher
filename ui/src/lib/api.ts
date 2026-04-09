@@ -65,6 +65,23 @@ export interface SetupResponse {
   botInfo?: { username: string; first_name: string };
 }
 
+export interface ChatResponse {
+  success: boolean;
+  reply: string;
+  demoMode?: boolean;
+  error?: string;
+  raw?: Record<string, unknown>;
+}
+
+export interface GatewayHealthResponse {
+  installed: boolean;
+  running: boolean;
+  healthy: boolean;
+  demoMode?: boolean;
+  dashboardUrl?: string | null;
+  statusOutput?: string;
+}
+
 export const api = {
   getStatus() {
     return request<StatusResponse>("/api/status");
@@ -134,5 +151,16 @@ export const api = {
     return request<{ success: boolean }>("/api/reset", {
       method: "POST",
     });
+  },
+
+  sendMessage(message: string) {
+    return request<ChatResponse>("/api/chat", {
+      method: "POST",
+      body: JSON.stringify({ message }),
+    });
+  },
+
+  getGatewayHealth() {
+    return request<GatewayHealthResponse>("/api/gateway/health");
   },
 };

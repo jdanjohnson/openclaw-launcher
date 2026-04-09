@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, Bot, User, Sparkles } from "lucide-react";
+import { Send, Bot, User, Sparkles, AlertCircle } from "lucide-react";
 import type { AgentState } from "../App";
+import { api } from "../lib/api";
 
 interface Props {
   agentState: AgentState;
@@ -11,15 +12,9 @@ interface Message {
   role: "user" | "agent";
   content: string;
   timestamp: Date;
+  error?: boolean;
+  demoMode?: boolean;
 }
-
-const DEMO_RESPONSES = [
-  "Hey there! I'm your personal AI agent running right here on your Raspberry Pi. What can I help you with?",
-  "I can help with task management, research, scheduling, and much more. Since I'm running locally on your Pi, everything stays private.",
-  "Great question! I'm connected to cloud AI models for reasoning, but all my orchestration happens right here on your hardware. Your conversations and data never leave unless you choose to share them.",
-  "I can help you set up automations, manage your tasks, draft content, analyze data, and coordinate across your connected channels. Think of me as your personal chief of staff.",
-  "Sure! Try asking me to help plan something, research a topic, or just have a conversation. I'm here 24/7 on your Pi.",
-];
 
 export default function Chat({ agentState }: Props) {
   const [messages, setMessages] = useState<Message[]>([
@@ -33,14 +28,13 @@ export default function Chat({ agentState }: Props) {
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const responseIdx = useRef(0);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isTyping]);
 
-  const sendMessage = () => {
-    if (!input.trim()) return;
+  const sendMessage = async () => {
+    if (!input.trim() || isTyping) return;
 
     const userMsg: Message = {
       id: `user-${Date.now()}`,
@@ -49,23 +43,38 @@ export default function Chat({ agentState }: Props) {
       timestamp: new Date(),
     };
     setMessages((prev) => [...prev, userMsg]);
+    const userInput = input.trim();
     setInput("");
     setIsTyping(true);
 
-    // In production, this would hit the OpenClaw gateway WebSocket
-    // For now, use demo responses
-    setTimeout(() => {
-      const response = DEMO_RESPONSES[responseIdx.current % DEMO_RESPONSES.length];
-      responseIdx.current++;
+    try {
+      const result = await api.sendMessage(userInput);
+
       const agentMsg: Message = {
         id: `agent-${Date.now()}`,
         role: "agent",
-        content: response,
+        content: result.ok
+          ? result.data.reply
+          : "Sorry, I couldn't process that. Please try again.",
         timestamp: new Date(),
+        error: !result.ok,
+        demoMode: result.data.demoMode,
       };
       setMessages((prev) => [...prev, agentMsg]);
+    } catch {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `agent-${Date.now()}`,
+          role: "agent",
+          content: "Connection error. Make sure the server is running.",
+          timestamp: new Date(),
+          error: true,
+        },
+      ]);
+    } finally {
       setIsTyping(false);
-    }, 1000 + Math.random() * 2000);
+    }
   };
 
   return (
@@ -103,13 +112,26 @@ export default function Chat({ agentState }: Props) {
             </div>
             <div className={`max-w-lg rounded-xl px-4 py-3 ${
               msg.role === "agent"
-                ? "bg-zinc-800 text-zinc-200"
+                ? msg.error
+                  ? "bg-red-900/30 border border-red-800 text-red-200"
+                  : "bg-zinc-800 text-zinc-200"
                 : "bg-orange-600 text-white"
             }`}>
-              <p className="text-sm leading-relaxed">{msg.content}</p>
-              <p className="text-xs mt-1 opacity-50">
-                {msg.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-              </p>
+              {msg.error && (
+                <div className="flex items-center gap-1.5 mb-1">
+                  <AlertCircle className="w-3 h-3 text-red-400" />
+                  <span className="text-xs text-red-400">Error</span>
+                </div>
+              )}
+              <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+              <div className="flex items-center gap-2 mt-1">
+                <p className="text-xs opacity-50">
+                  {msg.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                </p>
+                {msg.demoMode && (
+                  <span className="text-xs text-amber-400/60">demo</span>
+                )}
+              </div>
             </div>
           </div>
         ))}
@@ -139,10 +161,11 @@ export default function Chat({ agentState }: Props) {
             onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage()}
             placeholder={`Message ${agentState.agentName || "your agent"}...`}
             className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-3 text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+            disabled={isTyping}
           />
           <button
             onClick={sendMessage}
-            disabled={!input.trim()}
+            disabled={!input.trim() || isTyping}
             className="bg-orange-600 hover:bg-orange-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg px-4 py-3 transition-colors"
           >
             <Send className="w-5 h-5" />
