@@ -343,7 +343,7 @@ app.post("/api/setup/telegram", async (req, res) => {
   let botInfo = null;
   try {
     const rawResponse = await httpsGet(
-      `https://api.telegram.org/bot${encodeURIComponent(botToken.trim())}/getMe`
+      `https://api.telegram.org/bot${botToken.trim()}/getMe`
     );
     const parsed = JSON.parse(rawResponse);
     if (!parsed.ok) {
@@ -400,14 +400,13 @@ app.post("/api/setup/telegram", async (req, res) => {
 
 // Step 4 -> 5: Launch / activate the agent
 app.post("/api/activate", (_req, res) => {
-  const state = loadState();
-
   if (isOpenClawInstalled()) {
     // Try to restart the gateway
     runSafeCommand("openclaw", ["restart"]);
 
-    // Give it a moment to start
+    // Give it a moment to start, then re-load fresh state
     setTimeout(() => {
+      const state = loadState();
       const statusResult = runSafeCommand("openclaw", ["status"]);
       const running =
         statusResult.success &&
@@ -426,6 +425,7 @@ app.post("/api/activate", (_req, res) => {
     }, 5000);
   } else {
     // OpenClaw not installed — mark as complete anyway for dev/demo
+    const state = loadState();
     state.gatewayRunning = true;
     state.currentStep = Math.max(state.currentStep, 5);
     if (!state.completedSteps.includes("launched")) {
@@ -448,7 +448,6 @@ app.post("/api/activate", (_req, res) => {
 // Toggle gateway on/off
 app.post("/api/gateway/toggle", (req, res) => {
   const { action } = req.body;
-  const state = loadState();
 
   if (isOpenClawInstalled()) {
     if (action === "start") {
@@ -457,7 +456,9 @@ app.post("/api/gateway/toggle", (req, res) => {
       runSafeCommand("openclaw", ["stop"]);
     }
 
+    // Re-load fresh state after the delay to avoid overwriting concurrent changes
     setTimeout(() => {
+      const state = loadState();
       const statusResult = runSafeCommand("openclaw", ["status"]);
       const running =
         statusResult.success &&
@@ -467,6 +468,7 @@ app.post("/api/gateway/toggle", (req, res) => {
       res.json({ success: true, gatewayRunning: running, state });
     }, 3000);
   } else {
+    const state = loadState();
     state.gatewayRunning = action === "start";
     saveState(state);
     res.json({ success: true, gatewayRunning: state.gatewayRunning, state });
