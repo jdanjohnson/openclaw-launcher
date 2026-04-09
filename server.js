@@ -164,13 +164,13 @@ function runSafeCommandAsync(file, args, timeoutMs = 120000) {
   });
 }
 
-// HTTP GET for local gateway API
+// HTTP GET for local gateway API — returns { statusCode, body }
 function httpGet(url, timeoutMs = 5000) {
   return new Promise((resolve, reject) => {
     const req = http.get(url, { timeout: timeoutMs }, (res) => {
       let data = "";
       res.on("data", (chunk) => (data += chunk));
-      res.on("end", () => resolve(data));
+      res.on("end", () => resolve({ statusCode: res.statusCode, body: data }));
     });
     req.on("error", reject);
     req.on("timeout", () => {
@@ -660,12 +660,14 @@ app.get("/api/gateway/health", async (_req, res) => {
   if (running) {
     try {
       const healthData = await httpGet("http://127.0.0.1:18789/api/health", 3000);
-      healthy = true;
+      healthy = healthData.statusCode >= 200 && healthData.statusCode < 300;
       dashboardUrl = "http://127.0.0.1:18789";
-      try {
-        const parsed = JSON.parse(healthData);
-        healthy = parsed.ok !== false;
-      } catch { /* raw response is fine */ }
+      if (healthy) {
+        try {
+          const parsed = JSON.parse(healthData.body);
+          healthy = parsed.ok !== false;
+        } catch { /* raw 2xx response is fine */ }
+      }
     } catch {
       // Gateway not responding on HTTP
       healthy = false;
