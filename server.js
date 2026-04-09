@@ -1,6 +1,7 @@
 const express = require("express");
-const { execFileSync } = require("child_process");
+const { execFileSync, execFile } = require("child_process");
 const https = require("https");
+const http = require("http");
 const fs = require("fs");
 const path = require("path");
 
@@ -109,18 +110,24 @@ function resolveOpenClawBin() {
     "/usr/bin/openclaw",
   ];
 
-  // Also check other users' npm-global dirs (e.g. installed as different user)
-  try {
-    const homes = fs.readdirSync("/home");
-    for (const h of homes) {
-      candidates.push(path.join("/home", h, ".npm-global", "bin", "openclaw"));
-    }
-  } catch { /* /home not readable, skip */ }
+  // Also check the dedicated 'openclaw' system user's install path
+  // (the official installer may create this user)
+  candidates.push("/home/openclaw/.npm-global/bin/openclaw");
 
   for (const candidate of candidates) {
     try {
       fs.accessSync(candidate, fs.constants.X_OK);
-      return candidate;
+      // Verify the binary is owned by root or current user to prevent
+      // untrusted binary execution from other users' home dirs
+      const stat = fs.statSync(candidate);
+      if (stat.uid === 0 || stat.uid === process.getuid()) {
+        return candidate;
+      }
+      // Allow binaries owned by the 'openclaw' system user
+      try {
+        const ownerName = execFileSync("stat", ["-c", "%U", candidate], { encoding: "utf8" }).trim();
+        if (ownerName === "openclaw") return candidate;
+      } catch { /* stat failed, skip this candidate */ }
     } catch { /* not found or not executable */ }
   }
 
@@ -136,6 +143,47 @@ function isOpenClawInstalled() {
   // Re-check in case it was installed after server start
   openclawBin = resolveOpenClawBin();
   return !!openclawBin;
+}
+
+// Async command execution for long-running commands (e.g. openclaw agent)
+function runSafeCommandAsync(file, args, timeoutMs = 120000) {
+  return new Promise((resolve) => {
+    try {
+      const proc = execFile(
+        file,
+        args,
+        { timeout: timeoutMs, encoding: "utf8", maxBuffer: 1024 * 1024 },
+        (err, stdout, stderr) => {
+          if (err) {
+            resolve({ success: false, output: stderr || err.message || "Command failed" });
+          } else {
+            resolve({ success: true, output: (stdout || "").trim() });
+          }
+        }
+      );
+      proc.on("error", (err) => {
+        resolve({ success: false, output: err.message || "Command failed" });
+      });
+    } catch (err) {
+      resolve({ success: false, output: err.message || "Command failed" });
+    }
+  });
+}
+
+// HTTP GET for local gateway API — returns { statusCode, body }
+function httpGet(url, timeoutMs = 5000) {
+  return new Promise((resolve, reject) => {
+    const req = http.get(url, { timeout: timeoutMs }, (res) => {
+      let data = "";
+      res.on("data", (chunk) => (data += chunk));
+      res.on("end", () => resolve({ statusCode: res.statusCode, body: data }));
+    });
+    req.on("error", reject);
+    req.on("timeout", () => {
+      req.destroy();
+      reject(new Error("Timeout"));
+    });
+  });
 }
 
 // -------------------------------------------------------------------
@@ -520,6 +568,125 @@ app.post("/api/gateway/toggle", (req, res) => {
     saveState(state);
     res.json({ success: true, gatewayRunning: state.gatewayRunning, state });
   }
+});
+
+// -------------------------------------------------------------------
+// Chat — talk to the real OpenClaw agent
+// -------------------------------------------------------------------
+app.post("/api/chat", async (req, res) => {
+  const { message } = req.body;
+  if (!message || message.trim().length === 0) {
+    return res.status(400).json({ error: "Message is required" });
+  }
+
+  // Limit message length to prevent abuse
+  const safeMessage = message.trim().slice(0, 2000);
+
+  if (isOpenClawInstalled()) {
+    // Use openclaw agent to send message and get response
+    const result = await runSafeCommandAsync(
+      openclawBin || "openclaw",
+      ["agent", "--message", safeMessage, "--json"],
+      120000
+    );
+
+    if (result.success) {
+      try {
+        const parsed = JSON.parse(result.output);
+        return res.json({
+          success: true,
+          reply: parsed.reply || parsed.content || parsed.message || result.output,
+          raw: parsed,
+        });
+      } catch {
+        // Non-JSON output — return as plain text
+        return res.json({
+          success: true,
+          reply: result.output,
+        });
+      }
+    } else {
+      return res.json({
+        success: false,
+        reply: "I'm having trouble connecting to the agent. Make sure the gateway is running and an API key is configured.",
+        error: result.output,
+        demoMode: false,
+      });
+    }
+  } else {
+    // Demo mode — return helpful demo response
+    const demoResponses = [
+      "Hey there! I'm your personal AI agent running right here on your Raspberry Pi. What can I help you with?",
+      "I can help with task management, research, scheduling, and much more. Since I'm running locally on your Pi, everything stays private.",
+      "Great question! I'm connected to cloud AI models for reasoning, but all my orchestration happens right here on your hardware.",
+      "I can help you set up automations, manage your tasks, draft content, analyze data, and coordinate across your connected channels.",
+      "Sure! Try asking me to help plan something, research a topic, or just have a conversation. I'm here 24/7 on your Pi.",
+    ];
+    const state = loadState();
+    const msgCount = (state._demoMsgCount || 0) + 1;
+    state._demoMsgCount = msgCount;
+    saveState(state);
+
+    return res.json({
+      success: true,
+      reply: demoResponses[(msgCount - 1) % demoResponses.length],
+      demoMode: true,
+    });
+  }
+});
+
+// -------------------------------------------------------------------
+// Gateway health — check if the gateway is actually responding
+// -------------------------------------------------------------------
+app.get("/api/gateway/health", async (_req, res) => {
+  if (!isOpenClawInstalled()) {
+    return res.json({
+      installed: false,
+      running: false,
+      healthy: false,
+      demoMode: true,
+    });
+  }
+
+  // Check if gateway process is running
+  const statusResult = runSafeCommand(
+    openclawBin || "openclaw",
+    ["gateway", "status"],
+    10000
+  );
+  const statusOutput = statusResult.output.toLowerCase();
+  const running = statusResult.success && (
+    statusOutput.includes("running") ||
+    statusOutput.includes("active")
+  );
+
+  // Try to reach the gateway's HTTP health endpoint
+  let healthy = false;
+  let dashboardUrl = null;
+  if (running) {
+    try {
+      const healthData = await httpGet("http://127.0.0.1:18789/api/health", 3000);
+      healthy = healthData.statusCode >= 200 && healthData.statusCode < 300;
+      dashboardUrl = "http://127.0.0.1:18789";
+      if (healthy) {
+        try {
+          const parsed = JSON.parse(healthData.body);
+          healthy = parsed.ok !== false;
+        } catch { /* raw 2xx response is fine */ }
+      }
+    } catch {
+      // Gateway not responding on HTTP
+      healthy = false;
+    }
+  }
+
+  res.json({
+    installed: true,
+    running,
+    healthy,
+    dashboardUrl,
+    statusOutput: statusResult.output.slice(0, 500),
+  });
 });
 
 // Update template/skills

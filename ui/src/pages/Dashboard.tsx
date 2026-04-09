@@ -1,3 +1,4 @@
+import { useState, useEffect, useCallback } from "react";
 import {
   MessageCircle,
   Zap,
@@ -7,8 +8,11 @@ import {
   Sparkles,
   Brain,
   Shield,
+  Power,
+  RefreshCw,
 } from "lucide-react";
 import type { Page, AgentState } from "../App";
+import { api } from "../lib/api";
 
 interface Props {
   agentState: AgentState;
@@ -19,6 +23,64 @@ export default function Dashboard({ agentState, setPage }: Props) {
   const isSetupComplete = agentState.currentStep >= 5;
   const agentName = agentState.agentName || "Your Agent";
 
+  const [gatewayHealth, setGatewayHealth] = useState<{
+    installed: boolean;
+    running: boolean;
+    healthy: boolean;
+    demoMode?: boolean;
+  } | null>(null);
+  const [healthLoading, setHealthLoading] = useState(false);
+
+  const fetchHealth = useCallback(async () => {
+    setHealthLoading(true);
+    try {
+      const result = await api.getGatewayHealth();
+      if (result.ok) {
+        setGatewayHealth(result.data);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setHealthLoading(false);
+    }
+  }, []);
+
+  // Poll gateway health every 15 seconds when setup is complete
+  useEffect(() => {
+    if (!isSetupComplete) return;
+    fetchHealth();
+    const interval = setInterval(fetchHealth, 15000);
+    return () => clearInterval(interval);
+  }, [isSetupComplete, fetchHealth]);
+
+  const gatewayStatus = gatewayHealth
+    ? gatewayHealth.running
+      ? gatewayHealth.healthy
+        ? "online"
+        : "degraded"
+      : "offline"
+    : agentState.gatewayRunning
+      ? "online"
+      : "offline";
+
+  const statusLabel = {
+    online: "Online and listening",
+    degraded: "Running but not responding",
+    offline: "Offline",
+  }[gatewayStatus];
+
+  const statusColor = {
+    online: "text-emerald-400",
+    degraded: "text-amber-400",
+    offline: "text-zinc-500",
+  }[gatewayStatus];
+
+  const statusDot = {
+    online: "bg-emerald-400",
+    degraded: "bg-amber-400",
+    offline: "bg-zinc-600",
+  }[gatewayStatus];
+
   return (
     <div className="p-8 max-w-5xl mx-auto">
       {/* Personalized Welcome */}
@@ -28,7 +90,7 @@ export default function Dashboard({ agentState, setPage }: Props) {
         </h1>
         <p className="text-zinc-400">
           {isSetupComplete
-            ? "Your personal AI assistant is online and ready"
+            ? `Your personal AI assistant is ${gatewayStatus === "online" ? "online and ready" : "set up"}`
             : "Set up your agent to get started"}
         </p>
       </div>
@@ -57,14 +119,47 @@ export default function Dashboard({ agentState, setPage }: Props) {
       {/* Agent Status Hero */}
       {isSetupComplete && (
         <div className="bg-gradient-to-br from-zinc-900 to-zinc-800 border border-zinc-700 rounded-2xl p-6 mb-8">
-          <div className="flex items-center gap-4 mb-4">
-            <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center">
-              <Sparkles className="w-7 h-7 text-white" />
-              <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-emerald-400 rounded-full border-2 border-zinc-900" />
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-4">
+              <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center">
+                <Sparkles className="w-7 h-7 text-white" />
+                <span className={`absolute -top-1 -right-1 w-3.5 h-3.5 ${statusDot} rounded-full border-2 border-zinc-900`} />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-zinc-100">{agentName}</h2>
+                <div className="flex items-center gap-2">
+                  <p className={`text-sm ${statusColor}`}>{statusLabel}</p>
+                  {gatewayHealth?.demoMode && (
+                    <span className="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full">Demo</span>
+                  )}
+                </div>
+              </div>
             </div>
-            <div>
-              <h2 className="text-xl font-bold text-zinc-100">{agentName}</h2>
-              <p className="text-sm text-emerald-400">Online and listening</p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={fetchHealth}
+                disabled={healthLoading}
+                className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors disabled:opacity-40"
+                title="Refresh status"
+              >
+                <RefreshCw className={`w-4 h-4 ${healthLoading ? "animate-spin" : ""}`} />
+              </button>
+              {gatewayHealth?.installed && (
+                <button
+                  onClick={async () => {
+                    await api.toggleGateway(gatewayStatus === "online" ? "stop" : "start");
+                    setTimeout(fetchHealth, 4000);
+                  }}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                    gatewayStatus === "online"
+                      ? "bg-red-500/10 text-red-400 hover:bg-red-500/20"
+                      : "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
+                  }`}
+                >
+                  <Power className="w-3.5 h-3.5" />
+                  {gatewayStatus === "online" ? "Stop" : "Start"}
+                </button>
+              )}
             </div>
           </div>
           <div className="grid grid-cols-3 gap-4">

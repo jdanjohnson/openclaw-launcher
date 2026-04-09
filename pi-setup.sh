@@ -122,13 +122,11 @@ SERVICE_PATH="/usr/local/bin:/usr/bin:/bin"
 if [ -d "$HOME/.npm-global/bin" ]; then
   SERVICE_PATH="$HOME/.npm-global/bin:$SERVICE_PATH"
 fi
-# Also include other users' npm-global dirs in case openclaw was installed
-# by a different user (e.g. a setup/deploy user)
-for dir in /home/*/.npm-global/bin; do
-  if [ -d "$dir" ]; then
-    SERVICE_PATH="$dir:$SERVICE_PATH"
-  fi
-done
+# Also include the dedicated 'openclaw' system user's install path
+# (the official installer may create this user)
+if [ -d "/home/openclaw/.npm-global/bin" ]; then
+  SERVICE_PATH="/home/openclaw/.npm-global/bin:$SERVICE_PATH"
+fi
 
 SERVICE_FILE="/etc/systemd/system/openclaw-launcher.service"
 sudo tee "$SERVICE_FILE" > /dev/null <<EOF
