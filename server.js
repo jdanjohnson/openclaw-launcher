@@ -426,7 +426,7 @@ app.post("/api/activate", (_req, res) => {
   } else {
     // OpenClaw not installed — mark as complete anyway for dev/demo
     const state = loadState();
-    state.gatewayRunning = true;
+    state.gatewayRunning = false;
     state.currentStep = Math.max(state.currentStep, 5);
     if (!state.completedSteps.includes("launched")) {
       state.completedSteps.push("launched");

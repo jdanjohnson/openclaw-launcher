@@ -84,7 +84,7 @@ const SKILLS: { id: string; name: string; desc: string; comingSoon?: boolean }[]
 ];
 
 export default function Onboarding({ agentState, updateState, unlockAchievement, setPage }: Props) {
-  const [step, setStep] = useState(agentState.currentStep);
+  const [step, setStep] = useState(Math.min(agentState.currentStep, 4));
 
   // Step 0: About You
   const [yourName, setYourName] = useState(agentState.userName || "");
