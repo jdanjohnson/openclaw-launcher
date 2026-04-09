@@ -292,7 +292,7 @@ app.post("/api/setup/api-key", (req, res) => {
       envContent = fs.readFileSync(envFile, "utf8");
     }
     const envVar = envVarMap[provider];
-    const line = `${envVar}=${apiKey.trim()}`;
+    const line = `${envVar}=${apiKey.trim().replace(/[\r\n]/g, "")}`;
     if (envContent.includes(envVar)) {
       envContent = envContent.replace(
         new RegExp(`${envVar}=.*`),
@@ -406,22 +406,26 @@ app.post("/api/activate", (_req, res) => {
 
     // Give it a moment to start, then re-load fresh state
     setTimeout(() => {
-      const state = loadState();
-      const statusResult = runSafeCommand("openclaw", ["status"]);
-      const running =
-        statusResult.success &&
-        statusResult.output.toLowerCase().includes("running");
+      try {
+        const state = loadState();
+        const statusResult = runSafeCommand("openclaw", ["status"]);
+        const running =
+          statusResult.success &&
+          statusResult.output.toLowerCase().includes("running");
 
-      state.gatewayRunning = running;
-      state.currentStep = Math.max(state.currentStep, 5);
-      if (!state.completedSteps.includes("launched")) {
-        state.completedSteps.push("launched");
+        state.gatewayRunning = running;
+        state.currentStep = Math.max(state.currentStep, 5);
+        if (!state.completedSteps.includes("launched")) {
+          state.completedSteps.push("launched");
+        }
+        unlockAchievement(state, "gateway-live", 40);
+        unlockAchievement(state, "first-message", 50);
+        saveState(state);
+
+        res.json({ success: true, gatewayRunning: running, state });
+      } catch (err) {
+        res.status(500).json({ error: "Failed to check agent status" });
       }
-      unlockAchievement(state, "gateway-live", 40);
-      unlockAchievement(state, "first-message", 50);
-      saveState(state);
-
-      res.json({ success: true, gatewayRunning: running, state });
     }, 5000);
   } else {
     // OpenClaw not installed — mark as complete anyway for dev/demo
@@ -458,14 +462,18 @@ app.post("/api/gateway/toggle", (req, res) => {
 
     // Re-load fresh state after the delay to avoid overwriting concurrent changes
     setTimeout(() => {
-      const state = loadState();
-      const statusResult = runSafeCommand("openclaw", ["status"]);
-      const running =
-        statusResult.success &&
-        statusResult.output.toLowerCase().includes("running");
-      state.gatewayRunning = running;
-      saveState(state);
-      res.json({ success: true, gatewayRunning: running, state });
+      try {
+        const state = loadState();
+        const statusResult = runSafeCommand("openclaw", ["status"]);
+        const running =
+          statusResult.success &&
+          statusResult.output.toLowerCase().includes("running");
+        state.gatewayRunning = running;
+        saveState(state);
+        res.json({ success: true, gatewayRunning: running, state });
+      } catch (err) {
+        res.status(500).json({ error: "Failed to check gateway status" });
+      }
     }, 3000);
   } else {
     const state = loadState();
