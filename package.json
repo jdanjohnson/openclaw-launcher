@@ -1,0 +1,23 @@
+{
+  "name": "openclaw-launcher",
+  "version": "1.0.0",
+  "description": "Personal AI agent launcher for Raspberry Pi — powered by OpenClaw",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "build-ui": "cd ui && npm install && npm run build",
+    "setup": "npm install && npm run build-ui",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/HGDWAPP/openclaw-launcher.git"
+  },
+  "license": "MIT"
+}
