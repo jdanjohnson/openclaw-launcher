@@ -57,7 +57,7 @@ export default function Chat({ agentState }: Props) {
           ? result.data.reply
           : "Sorry, I couldn't process that. Please try again.",
         timestamp: new Date(),
-        error: !result.ok,
+        error: !result.ok || result.data.success === false,
         demoMode: result.data.demoMode,
       };
       setMessages((prev) => [...prev, agentMsg]);
