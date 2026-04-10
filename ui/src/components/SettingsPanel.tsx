@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { X, Settings as SettingsIcon, Power, Trash2, AlertTriangle, Wifi, Terminal, ChevronDown, ChevronUp } from "lucide-react";
+import { X, Settings as SettingsIcon, Trash2, AlertTriangle, Wifi, Terminal, ChevronDown, ChevronUp, Activity } from "lucide-react";
 import type { BackendState } from "../lib/api";
 import { api } from "../lib/api";
 
 interface Props {
   agentState: BackendState;
-  systemInfo: { hostname: string; ip: string; ollamaOnline: boolean };
+  systemInfo: { hostname: string; ip: string; ollamaOnline: boolean; openclawInstalled: boolean };
   onClose: () => void;
   onUpdate: (state: Partial<BackendState>) => void;
   onReset: () => void;
@@ -102,6 +102,42 @@ export default function SettingsPanel({ agentState, systemInfo, onClose, onUpdat
           </div>
         </section>
 
+        {/* OpenClaw Gateway — always visible */}
+        <section className={`rounded-xl p-4 border ${agentState.gatewayRunning ? "bg-emerald-950/20 border-emerald-800/40" : "bg-zinc-800/50 border-zinc-700/50"}`}>
+          <div className="flex items-center gap-2 mb-2">
+            <Activity className={`w-4 h-4 ${agentState.gatewayRunning ? "text-emerald-400" : "text-orange-400"}`} />
+            <h3 className="text-sm font-semibold text-zinc-300">{"🦞"} OpenClaw Gateway</h3>
+          </div>
+          <p className="text-xs text-zinc-500 mb-3">
+            Agent orchestration engine — multi-step workflows, tool use, and real-time streaming.
+          </p>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${agentState.gatewayRunning ? "bg-emerald-400 animate-pulse" : "bg-zinc-600"}`} />
+              <p className={`text-sm font-medium ${agentState.gatewayRunning ? "text-emerald-400" : "text-zinc-500"}`}>
+                {agentState.gatewayRunning ? "Running" : "Stopped"}
+              </p>
+            </div>
+            <button
+              onClick={handleToggle}
+              disabled={toggling || !systemInfo.openclawInstalled}
+              title={!systemInfo.openclawInstalled ? "OpenClaw CLI not installed" : undefined}
+              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                agentState.gatewayRunning
+                  ? "bg-zinc-700 text-zinc-400 hover:bg-zinc-600"
+                  : "bg-emerald-600 hover:bg-emerald-500 text-white"
+              } disabled:opacity-50`}
+            >
+              {toggling ? "..." : agentState.gatewayRunning ? "Stop" : "Start"}
+            </button>
+          </div>
+          {!systemInfo.openclawInstalled && (
+            <p className="text-xs text-amber-500/70 mt-2">
+              OpenClaw CLI not installed. Install it to enable the gateway.
+            </p>
+          )}
+        </section>
+
         {/* SSH Configuration */}
         <section className="bg-zinc-800/50 rounded-xl p-4 border border-zinc-700/50">
           <div className="flex items-center gap-2 mb-3">
@@ -152,33 +188,6 @@ export default function SettingsPanel({ agentState, systemInfo, onClose, onUpdat
 
         {showAdvanced && (
           <>
-            {/* OpenClaw Gateway */}
-            <section className="bg-zinc-800/50 rounded-xl p-4 border border-zinc-700/50">
-              <div className="flex items-center gap-2 mb-3">
-                <Power className="w-4 h-4 text-emerald-400" />
-                <h3 className="text-sm font-semibold text-zinc-300">{"🦞"} OpenClaw Gateway</h3>
-              </div>
-              <p className="text-xs text-zinc-500 mb-3">
-                Advanced agent orchestration. Multi-step workflows, tool use, and real-time streaming.
-              </p>
-              <div className="flex items-center justify-between">
-                <p className={`text-sm font-medium ${agentState.gatewayRunning ? "text-emerald-400" : "text-zinc-500"}`}>
-                  {agentState.gatewayRunning ? "Running" : "Stopped"}
-                </p>
-                <button
-                  onClick={handleToggle}
-                  disabled={toggling}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                    agentState.gatewayRunning
-                      ? "bg-zinc-700 text-zinc-400 hover:bg-zinc-600"
-                      : "bg-emerald-600 hover:bg-emerald-500 text-white"
-                  } disabled:opacity-50`}
-                >
-                  {toggling ? "..." : agentState.gatewayRunning ? "Stop" : "Start"}
-                </button>
-              </div>
-            </section>
-
             {/* Reset */}
             <section className="bg-zinc-800/50 rounded-xl p-4 border border-red-900/20">
               <div className="flex items-center gap-2 mb-3">

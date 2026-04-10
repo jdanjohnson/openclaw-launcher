@@ -64,7 +64,7 @@ const DEFAULT_BACKEND_STATE: Partial<BackendState> = {
 function App() {
   const [phase, setPhase] = useState<AppPhase>("boot");
   const [agentState, setAgentState] = useState<BackendState>(DEFAULT_BACKEND_STATE as BackendState);
-  const [systemInfo, setSystemInfo] = useState({ hostname: "", ip: "", ollamaOnline: false });
+  const [systemInfo, setSystemInfo] = useState({ hostname: "", ip: "", ollamaOnline: false, openclawInstalled: false });
   const [activePanel, setActivePanel] = useState<PanelId>(null);
   const [apiLoaded, setApiLoaded] = useState(false);
   const [bootAnimDone, setBootAnimDone] = useState(false);
@@ -82,6 +82,7 @@ function App() {
           hostname: res.data.system?.hostname || "",
           ip: res.data.system?.ip || "",
           ollamaOnline: res.data.system?.ollamaOnline || false,
+          openclawInstalled: res.data.system?.openclawInstalled || false,
         });
       }
       setApiLoaded(true);
