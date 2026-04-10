@@ -94,7 +94,7 @@ function App() {
   useEffect(() => {
     if (bootAnimDone && apiLoaded && phase === "boot") {
       const state = apiStateRef.current;
-      if (state?.onboardingComplete) {
+      if (state?.onboardingComplete || (state?.currentStep ?? 0) >= 5) {
         setPhase("desktop");
       } else {
         setPhase("onboarding");

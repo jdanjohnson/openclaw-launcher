@@ -311,6 +311,8 @@ app.post("/api/brain/switch", (req, res) => {
       }
     } catch { /* Non-fatal */ }
     unlockAchievement(state, "brain-connected", 30);
+  } else {
+    return res.status(400).json({ error: "Invalid provider. Must be 'local' or 'cloud'." });
   }
   saveState(state);
   res.json({ success: true, state });
