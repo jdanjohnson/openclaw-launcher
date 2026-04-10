@@ -231,6 +231,13 @@ for i in $(seq 1 30); do
   sleep 1
 done
 
+# Disable screen blanking on X11 (no-op on Wayland)
+if [ "$XDG_SESSION_TYPE" != "wayland" ] && [ -z "$WAYLAND_DISPLAY" ]; then
+  xset s off 2>/dev/null || true
+  xset -dpms 2>/dev/null || true
+  xset s noblank 2>/dev/null || true
+fi
+
 # Kill any existing Chromium instances
 killall chromium-browser 2>/dev/null || true
 killall chromium 2>/dev/null || true
