@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Sparkles } from "lucide-react";
 import { api } from "../lib/api";
+import type { BackendState } from "../lib/api";
 
 interface Props {
-  onComplete: () => void;
+  onComplete: (state: BackendState) => void;
 }
 
 export default function QuickOnboarding({ onComplete }: Props) {
@@ -17,7 +18,7 @@ export default function QuickOnboarding({ onComplete }: Props) {
     setLoading(true);
     const res = await api.onboard(userName.trim(), agentName.trim());
     if (res.ok) {
-      onComplete();
+      onComplete(res.data.state);
     }
     setLoading(false);
   };

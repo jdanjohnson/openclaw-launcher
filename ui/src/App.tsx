@@ -106,13 +106,10 @@ function App() {
     setBootAnimDone(true);
   }, []);
 
-  const handleOnboardingComplete = useCallback(() => {
-    // Re-fetch state after onboarding
-    api.getStatus().then((res) => {
-      if (res.ok && res.data.state) {
-        setAgentState({ ...DEFAULT_BACKEND_STATE, ...res.data.state } as BackendState);
-      }
-    });
+  const handleOnboardingComplete = useCallback((state: BackendState) => {
+    // Apply the state returned by /api/onboard immediately so the desktop
+    // renders with correct agentName, agentMood, xp, etc. instead of stale defaults.
+    setAgentState({ ...DEFAULT_BACKEND_STATE, ...state } as BackendState);
     setPhase("desktop");
   }, []);
 
