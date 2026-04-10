@@ -4,10 +4,12 @@ const http = require("http");
 const https = require("https");
 const fs = require("fs");
 const path = require("path");
+const WebSocket = require("ws");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const OLLAMA_BASE = process.env.OLLAMA_BASE || "http://localhost:11434";
+const GATEWAY_WS = process.env.OPENCLAW_GATEWAY_WS || "ws://127.0.0.1:18789";
 
 app.use(express.json());
 
@@ -243,7 +245,107 @@ app.post("/api/onboard", (req, res) => {
 });
 
 // -------------------------------------------------------------------
-// V2: Chat with Ollama
+// OpenClaw Gateway WebSocket chat helper
+// Sends a message via the gateway's chat.send method.
+// Returns the assistant reply text or null on failure.
+// -------------------------------------------------------------------
+let gatewayReqId = 0;
+function gatewayChatSend(message, timeoutMs = 120000) {
+  return new Promise((resolve) => {
+    let ws;
+    const timer = setTimeout(() => {
+      try { ws.close(); } catch { /* ignore */ }
+      resolve(null);
+    }, timeoutMs);
+
+    try {
+      ws = new WebSocket(GATEWAY_WS);
+    } catch {
+      clearTimeout(timer);
+      return resolve(null);
+    }
+
+    let handshakeDone = false;
+    let reqId = `launcher-${++gatewayReqId}`;
+    let collectedText = "";
+
+    ws.on("error", () => { clearTimeout(timer); resolve(null); });
+
+    ws.on("open", () => {
+      // Wait for challenge (gateway sends connect.challenge first)
+    });
+
+    ws.on("message", (raw) => {
+      let data;
+      try { data = JSON.parse(raw.toString()); } catch { return; }
+
+      // Step 1: Respond to connect.challenge with a connect request
+      if (data.type === "event" && data.event === "connect.challenge") {
+        ws.send(JSON.stringify({
+          type: "req", id: `connect-${gatewayReqId}`, method: "connect",
+          params: {
+            minProtocol: 3, maxProtocol: 3,
+            client: { id: "stationed-launcher", version: "1.0.0", platform: "pi", mode: "webchat" },
+            role: "operator",
+            scopes: ["operator.admin"],
+            caps: [],
+            userAgent: "stationed-launcher/1.0.0",
+            locale: "en-US",
+          },
+        }));
+        return;
+      }
+
+      // Step 2: After connect response, send the chat message
+      if (data.type === "res" && !handshakeDone) {
+        if (data.error) {
+          clearTimeout(timer);
+          ws.close();
+          return resolve(null);
+        }
+        handshakeDone = true;
+        ws.send(JSON.stringify({
+          type: "req", id: reqId, method: "chat.send",
+          params: {
+            sessionKey: "default",
+            message: message,
+            thinking: "",
+            deliver: false,
+            timeoutMs: timeoutMs - 5000,
+            idempotencyKey: `run-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+          },
+        }));
+        return;
+      }
+
+      // Step 3: Collect streaming tokens and final response
+      if (data.type === "event" && data.event === "chat.token") {
+        const token = data.payload && data.payload.token;
+        if (token) collectedText += token;
+        return;
+      }
+
+      // Final response to our chat.send request
+      if (data.type === "res" && data.id === reqId) {
+        clearTimeout(timer);
+        const payload = data.payload || {};
+        // The reply can be in payload.response, payload.text, or collected from tokens
+        const text = payload.response || payload.text || payload.content || collectedText;
+        ws.close();
+        return resolve(text || null);
+      }
+    });
+
+    ws.on("close", () => {
+      clearTimeout(timer);
+      if (collectedText) return resolve(collectedText);
+      resolve(null);
+    });
+  });
+}
+
+// -------------------------------------------------------------------
+// V2: Chat — routes through OpenClaw Gateway first, falls back to Ollama
 // -------------------------------------------------------------------
 app.post("/api/chat", async (req, res) => {
   const { message, model } = req.body;
@@ -254,6 +356,22 @@ app.post("/api/chat", async (req, res) => {
   const agentName = state.agentName || "Agent";
   const userName = state.userName || "User";
   const useModel = model || state.localModel || "phi3:mini";
+
+  // Try OpenClaw Gateway first (the primary agent)
+  if (isOpenClawInstalled() || state.gatewayRunning) {
+    try {
+      const gatewayReply = await gatewayChatSend(message.trim());
+      if (gatewayReply) {
+        const freshState = loadState();
+        freshState.agentMood = "happy";
+        if (!freshState.achievements.includes("first-message")) { unlockAchievement(freshState, "first-message", 50); }
+        saveState(freshState);
+        return res.json({ response: gatewayReply, provider: "openclaw", model: "gateway" });
+      }
+    } catch { /* Gateway unavailable, fall through to Ollama */ }
+  }
+
+  // Fallback: direct Ollama
   const systemPrompt = `You are ${agentName}, a personal AI assistant running locally on a Raspberry Pi 5. You are helpful, friendly, and concise. Your owner's name is ${userName}. You live on their device and are always available. Keep responses under 3 sentences unless asked for more detail.`;
 
   if (state.modelProvider === "cloud" && state.cloudKeySet) {
@@ -266,13 +384,12 @@ app.post("/api/chat", async (req, res) => {
       stream: false, options: { temperature: 0.7, num_predict: 256 },
     }, 120000);
     if (ollamaRes.ok && ollamaRes.data && ollamaRes.data.response) {
-      // Re-load fresh state after the async Ollama call to avoid overwriting concurrent changes
       const freshState = loadState();
       freshState.agentMood = "happy";
       if (!freshState.achievements.includes("first-message")) { unlockAchievement(freshState, "first-message", 50); }
       saveState(freshState);
       return res.json({
-        response: ollamaRes.data.response, model: useModel, provider: "local",
+        response: ollamaRes.data.response, model: useModel, provider: "ollama",
         eval_duration: ollamaRes.data.eval_duration,
         tokens_per_second: ollamaRes.data.eval_count && ollamaRes.data.eval_duration
           ? (ollamaRes.data.eval_count / (ollamaRes.data.eval_duration / 1e9)).toFixed(1) : null,
@@ -281,9 +398,9 @@ app.post("/api/chat", async (req, res) => {
     return res.status(502).json({ error: "Ollama returned an unexpected response", details: ollamaRes.data });
   } catch (err) {
     const fallbackResponses = [
-      `Hey ${userName}! I'm ${agentName}. Ollama isn't running right now, but I'm still here in demo mode. Start Ollama to unlock my full brain!`,
-      `I'm running in demo mode because Ollama isn't available. Once it's running with a model like Phi-3, I'll be much smarter!`,
-      `${userName}, I'd love to help but my local brain (Ollama) isn't running. Try: ollama serve & ollama run phi3:mini`,
+      `Hey ${userName}! I'm ${agentName}. Neither OpenClaw Gateway nor Ollama are running. Start the gateway from Settings or run: ollama serve`,
+      `I'm ${agentName}, running in demo mode. Start the OpenClaw Gateway from Settings to unlock my full capabilities!`,
+      `${userName}, I need either the OpenClaw Gateway or Ollama to think properly. Start the gateway from Settings!`,
     ];
     return res.json({ response: fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)], provider: "demo", ollamaError: err.message });
   }
