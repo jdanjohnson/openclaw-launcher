@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface Props {
   onComplete: () => void;
@@ -6,16 +6,18 @@ interface Props {
 
 export default function BootSequence({ onComplete }: Props) {
   const [phase, setPhase] = useState(0);
+  const onCompleteRef = useRef(onComplete);
+  useEffect(() => { onCompleteRef.current = onComplete; }, [onComplete]);
 
   useEffect(() => {
     const timers = [
       setTimeout(() => setPhase(1), 800),
       setTimeout(() => setPhase(2), 2200),
       setTimeout(() => setPhase(3), 3500),
-      setTimeout(() => onComplete(), 4500),
+      setTimeout(() => onCompleteRef.current(), 4500),
     ];
     return () => timers.forEach(clearTimeout);
-  }, [onComplete]);
+  }, []);
 
   return (
     <div className="fixed inset-0 bg-black flex items-center justify-center z-50">

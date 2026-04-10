@@ -280,8 +280,12 @@ app.post("/api/brain/switch", (req, res) => {
     if (localModel) state.localModel = localModel;
     unlockAchievement(state, "brain-connected", 30);
   } else if (provider === "cloud") {
-    if (!cloudProvider || !apiKey || apiKey.trim().length < 10) {
-      return res.status(400).json({ error: "Cloud provider and valid API key required" });
+    const validProviders = ["google", "anthropic", "openai"];
+    if (!cloudProvider || !validProviders.includes(cloudProvider)) {
+      return res.status(400).json({ error: "Invalid cloud provider" });
+    }
+    if (!apiKey || apiKey.trim().length < 10) {
+      return res.status(400).json({ error: "Valid API key required" });
     }
     state.modelProvider = "cloud";
     state.cloudProvider = cloudProvider;
