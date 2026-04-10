@@ -1,11 +1,13 @@
 const express = require("express");
 const { execFileSync } = require("child_process");
+const http = require("http");
 const https = require("https");
 const fs = require("fs");
 const path = require("path");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const OLLAMA_BASE = process.env.OLLAMA_BASE || "http://localhost:11434";
 
 app.use(express.json());
 
@@ -40,6 +42,13 @@ function loadState() {
       xp: 0,
       level: 0,
       startedAt: new Date().toISOString(),
+      // V2 Agentic OS fields
+      onboardingComplete: false,
+      agentMood: "sleeping",
+      modelProvider: "local",
+      localModel: "phi3:mini",
+      cloudProvider: "",
+      cloudKeySet: false,
     };
   }
 }
@@ -93,6 +102,36 @@ function httpsGet(url, timeoutMs = 10000) {
   });
 }
 
+// HTTP request helper for Ollama (local HTTP)
+function ollamaRequest(method, urlPath, body, timeoutMs = 60000) {
+  return new Promise((resolve, reject) => {
+    const url = new URL(urlPath, OLLAMA_BASE);
+    const options = {
+      hostname: url.hostname,
+      port: url.port,
+      path: url.pathname,
+      method,
+      timeout: timeoutMs,
+      headers: { "Content-Type": "application/json" },
+    };
+    const req = http.request(options, (res) => {
+      let data = "";
+      res.on("data", (chunk) => (data += chunk));
+      res.on("end", () => {
+        try {
+          resolve({ ok: res.statusCode >= 200 && res.statusCode < 300, data: JSON.parse(data), status: res.statusCode });
+        } catch {
+          resolve({ ok: res.statusCode >= 200 && res.statusCode < 300, data: data, status: res.statusCode });
+        }
+      });
+    });
+    req.on("error", reject);
+    req.on("timeout", () => { req.destroy(); reject(new Error("Timeout")); });
+    if (body) { req.write(typeof body === "string" ? body : JSON.stringify(body)); }
+    req.end();
+  });
+}
+
 // Check if OpenClaw CLI is available
 function isOpenClawInstalled() {
   const result = runSafeCommand("which", ["openclaw"]);
@@ -103,8 +142,8 @@ function isOpenClawInstalled() {
 // API Routes
 // -------------------------------------------------------------------
 
-// Get current onboarding state + system info
-app.get("/api/status", (_req, res) => {
+// Get current onboarding state + system info (V2: now includes Ollama status)
+app.get("/api/status", async (_req, res) => {
   const state = loadState();
   const clawInstalled = isOpenClawInstalled();
 
@@ -118,9 +157,19 @@ app.get("/api/status", (_req, res) => {
 
   const hostnameResult = runSafeCommand("hostname", []);
   const hostname = hostnameResult.success ? hostnameResult.output : "openclaw-pi";
-
   const ipResult = runSafeCommand("hostname", ["-I"]);
   const ip = ipResult.success ? ipResult.output.split(" ")[0] : "unknown";
+
+  // Check Ollama status
+  let ollamaOnline = false;
+  let ollamaModels = [];
+  try {
+    const ollamaResult = await ollamaRequest("GET", "/api/tags", null, 3000);
+    if (ollamaResult.ok && ollamaResult.data && ollamaResult.data.models) {
+      ollamaOnline = true;
+      ollamaModels = ollamaResult.data.models.map((m) => ({ name: m.name, size: m.size, modified: m.modified_at }));
+    }
+  } catch { /* Ollama not running */ }
 
   state.gatewayRunning = gatewayRunning;
   saveState(state);
@@ -128,12 +177,139 @@ app.get("/api/status", (_req, res) => {
   res.json({
     state,
     system: {
-      hostname,
-      ip,
-      openclawInstalled: clawInstalled,
-      gatewayRunning,
+      hostname, ip, openclawInstalled: clawInstalled,
+      gatewayRunning, ollamaOnline, ollamaModels,
     },
   });
+});
+
+// -------------------------------------------------------------------
+// V2: Quick onboarding (30-second flow)
+// -------------------------------------------------------------------
+app.post("/api/onboard", (req, res) => {
+  const { userName, agentName } = req.body;
+  if (!agentName || agentName.trim().length === 0) {
+    return res.status(400).json({ error: "Agent name is required" });
+  }
+  const state = loadState();
+  state.userName = (userName || "").trim();
+  state.agentName = agentName.trim();
+  state.onboardingComplete = true;
+  state.agentMood = "happy";
+  state.currentStep = Math.max(state.currentStep, 5);
+  if (!state.completedSteps.includes("onboarded")) { state.completedSteps.push("onboarded"); }
+  unlockAchievement(state, "named", 10);
+  unlockAchievement(state, "gateway-live", 40);
+  saveState(state);
+  res.json({ success: true, state });
+});
+
+// -------------------------------------------------------------------
+// V2: Chat with Ollama
+// -------------------------------------------------------------------
+app.post("/api/chat", async (req, res) => {
+  const { message, model } = req.body;
+  if (!message || message.trim().length === 0) {
+    return res.status(400).json({ error: "Message is required" });
+  }
+  const state = loadState();
+  const agentName = state.agentName || "Agent";
+  const userName = state.userName || "User";
+  const useModel = model || state.localModel || "phi3:mini";
+  const systemPrompt = `You are ${agentName}, a personal AI assistant running locally on a Raspberry Pi 5. You are helpful, friendly, and concise. Your owner's name is ${userName}. You live on their device and are always available. Keep responses under 3 sentences unless asked for more detail.`;
+
+  if (state.modelProvider === "cloud" && state.cloudKeySet) {
+    return res.json({ response: "Cloud mode is active. Chat is handled directly by the cloud provider.", provider: "cloud", cloudProvider: state.cloudProvider });
+  }
+
+  try {
+    const ollamaRes = await ollamaRequest("POST", "/api/generate", {
+      model: useModel, prompt: message.trim(), system: systemPrompt,
+      stream: false, options: { temperature: 0.7, num_predict: 256 },
+    }, 120000);
+    if (ollamaRes.ok && ollamaRes.data && ollamaRes.data.response) {
+      state.agentMood = "happy";
+      if (!state.achievements.includes("first-message")) { unlockAchievement(state, "first-message", 50); }
+      saveState(state);
+      return res.json({
+        response: ollamaRes.data.response, model: useModel, provider: "local",
+        eval_duration: ollamaRes.data.eval_duration,
+        tokens_per_second: ollamaRes.data.eval_count && ollamaRes.data.eval_duration
+          ? (ollamaRes.data.eval_count / (ollamaRes.data.eval_duration / 1e9)).toFixed(1) : null,
+      });
+    }
+    return res.status(502).json({ error: "Ollama returned an unexpected response", details: ollamaRes.data });
+  } catch (err) {
+    const fallbackResponses = [
+      `Hey ${userName}! I'm ${agentName}. Ollama isn't running right now, but I'm still here in demo mode. Start Ollama to unlock my full brain!`,
+      `I'm running in demo mode because Ollama isn't available. Once it's running with a model like Phi-3, I'll be much smarter!`,
+      `${userName}, I'd love to help but my local brain (Ollama) isn't running. Try: ollama serve & ollama run phi3:mini`,
+    ];
+    return res.json({ response: fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)], provider: "demo", ollamaError: err.message });
+  }
+});
+
+// V2: Ollama status & models
+app.get("/api/ollama/status", async (_req, res) => {
+  try {
+    const result = await ollamaRequest("GET", "/api/tags", null, 5000);
+    if (result.ok && result.data && result.data.models) {
+      return res.json({ online: true, models: result.data.models.map((m) => ({ name: m.name, size: m.size, modified: m.modified_at, digest: m.digest })) });
+    }
+    return res.json({ online: false, models: [] });
+  } catch { return res.json({ online: false, models: [] }); }
+});
+
+// V2: Update agent mood
+app.post("/api/mood", (req, res) => {
+  const { mood } = req.body;
+  const validMoods = ["idle", "happy", "thinking", "talking", "sleeping"];
+  if (!validMoods.includes(mood)) { return res.status(400).json({ error: "Invalid mood" }); }
+  const state = loadState();
+  state.agentMood = mood;
+  saveState(state);
+  res.json({ success: true, mood });
+});
+
+// V2: Switch model provider (local vs cloud)
+app.post("/api/brain/switch", (req, res) => {
+  const { provider, localModel, cloudProvider, apiKey } = req.body;
+  const state = loadState();
+  if (provider === "local") {
+    state.modelProvider = "local";
+    if (localModel) state.localModel = localModel;
+    unlockAchievement(state, "brain-connected", 30);
+  } else if (provider === "cloud") {
+    if (!cloudProvider || !apiKey || apiKey.trim().length < 10) {
+      return res.status(400).json({ error: "Cloud provider and valid API key required" });
+    }
+    state.modelProvider = "cloud";
+    state.cloudProvider = cloudProvider;
+    state.cloudKeySet = true;
+    state.apiProvider = cloudProvider;
+    state.apiKeySet = true;
+    if (isOpenClawInstalled()) {
+      runSafeCommand("openclaw", ["models", "auth", "paste-token", "--provider", cloudProvider, "--token", apiKey.trim()]);
+    }
+    const envVarMap = { google: "GOOGLE_API_KEY", anthropic: "ANTHROPIC_API_KEY", openai: "OPENAI_API_KEY" };
+    const home = process.env.HOME || "/home/pi";
+    const envFile = path.join(home, ".openclaw", "env");
+    try {
+      fs.mkdirSync(path.join(home, ".openclaw"), { recursive: true });
+      let envContent = "";
+      if (fs.existsSync(envFile)) { envContent = fs.readFileSync(envFile, "utf8"); }
+      const envVar = envVarMap[cloudProvider];
+      if (envVar) {
+        const line = `${envVar}=${apiKey.trim().replace(/[\r\n]/g, "")}`;
+        if (envContent.includes(envVar)) { envContent = envContent.replace(new RegExp(`${envVar}=.*`), () => line); }
+        else { envContent += `\n${line}`; }
+        fs.writeFileSync(envFile, envContent.trim() + "\n");
+      }
+    } catch { /* Non-fatal */ }
+    unlockAchievement(state, "brain-connected", 30);
+  }
+  saveState(state);
+  res.json({ success: true, state });
 });
 
 // Step 0 -> 1: Save personal context (About You)
@@ -549,7 +725,8 @@ app.get("*", (_req, res) => {
 });
 
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`\n  OpenClaw Launcher`);
+  console.log(`\n  OpenClaw Launcher (Agentic OS)`);
   console.log(`  http://localhost:${PORT}`);
-  console.log(`  OpenClaw CLI: ${isOpenClawInstalled() ? "installed" : "not found (demo mode)"}\n`);
+  console.log(`  OpenClaw CLI: ${isOpenClawInstalled() ? "installed" : "not found (demo mode)"}`);
+  console.log(`  Ollama: ${OLLAMA_BASE}\n`);
 });
