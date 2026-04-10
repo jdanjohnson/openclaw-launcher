@@ -62,7 +62,7 @@ export default function ChatPanel({ agentName, onClose, onMoodChange }: Props) {
   };
 
   return (
-    <div className="fixed inset-4 sm:inset-auto sm:bottom-20 sm:right-4 sm:w-[420px] sm:h-[560px] bg-zinc-900 border border-zinc-700 rounded-2xl flex flex-col z-30 shadow-2xl shadow-black/50">
+    <div className="fixed inset-0 bg-zinc-900 flex flex-col z-30">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
         <div className="flex items-center gap-2">

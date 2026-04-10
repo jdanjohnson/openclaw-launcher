@@ -29,7 +29,7 @@ export default function BootSequence({ onComplete }: Props) {
           }`}
         >
           <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center shadow-lg shadow-orange-500/30">
-            <span className="text-3xl font-bold text-white">OC</span>
+            <span className="text-3xl">🦞</span>
           </div>
         </div>
 

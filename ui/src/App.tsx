@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import "./App.css";
 import { api } from "./lib/api";
 import type { BackendState } from "./lib/api";
@@ -66,31 +66,47 @@ function App() {
   const [agentState, setAgentState] = useState<BackendState>(DEFAULT_BACKEND_STATE as BackendState);
   const [systemInfo, setSystemInfo] = useState({ hostname: "", ip: "", ollamaOnline: false });
   const [activePanel, setActivePanel] = useState<PanelId>(null);
+  const [apiLoaded, setApiLoaded] = useState(false);
+  const [bootAnimDone, setBootAnimDone] = useState(false);
+  const apiStateRef = useRef<BackendState | null>(null);
 
   // Fetch state from backend on mount
   useEffect(() => {
     api.getStatus().then((res) => {
       if (res.ok && res.data.state) {
         const s = res.data.state;
-        setAgentState({ ...DEFAULT_BACKEND_STATE, ...s } as BackendState);
+        const merged = { ...DEFAULT_BACKEND_STATE, ...s } as BackendState;
+        setAgentState(merged);
+        apiStateRef.current = merged;
         setSystemInfo({
           hostname: res.data.system?.hostname || "",
           ip: res.data.system?.ip || "",
           ollamaOnline: res.data.system?.ollamaOnline || false,
         });
       }
+      setApiLoaded(true);
+    }).catch(() => {
+      setApiLoaded(true);
     });
   }, []);
 
-  const handleBootComplete = useCallback(() => {
-    if (agentState.onboardingComplete) {
-      setPhase("desktop");
-    } else {
-      setPhase("onboarding");
+  // Transition out of boot only when BOTH animation is done AND API has responded
+  useEffect(() => {
+    if (bootAnimDone && apiLoaded && phase === "boot") {
+      const state = apiStateRef.current;
+      if (state?.onboardingComplete) {
+        setPhase("desktop");
+      } else {
+        setPhase("onboarding");
+      }
     }
-  }, [agentState.onboardingComplete]);
+  }, [bootAnimDone, apiLoaded, phase]);
 
-  const handleOnboardingComplete = useCallback((_userName: string, _agentName: string) => {
+  const handleBootComplete = useCallback(() => {
+    setBootAnimDone(true);
+  }, []);
+
+  const handleOnboardingComplete = useCallback(() => {
     // Re-fetch state after onboarding
     api.getStatus().then((res) => {
       if (res.ok && res.data.state) {
@@ -140,10 +156,9 @@ function App() {
       {/* Top bar */}
       <div className="relative z-10 flex items-center justify-between px-4 py-2 bg-zinc-950/80 backdrop-blur-sm border-b border-zinc-800/50">
         <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-md bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center">
-            <span className="text-[10px] font-bold text-white">OC</span>
-          </div>
-          <span className="text-xs text-zinc-500 font-mono">OpenClaw</span>
+          <span className="text-xs font-bold text-zinc-200 tracking-wide">STATIONED AGENTS</span>
+          <span className="text-[10px] text-zinc-500">powered by</span>
+          <span className="text-xs text-orange-400">{"\uD83E\uDD9E"}OpenClaw</span>
         </div>
         <div className="flex items-center gap-3 text-xs text-zinc-600">
           <span>{agentState.userName && `${agentState.userName}'s Pi`}</span>
