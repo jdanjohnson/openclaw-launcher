@@ -68,7 +68,7 @@ export interface StatusResponse {
 export interface ChatResponse {
   response: string;
   model?: string;
-  provider: "local" | "cloud" | "demo";
+  provider: "openclaw" | "ollama" | "local" | "cloud" | "demo";
   tokens_per_second?: string | null;
   ollamaError?: string;
   cloudProvider?: string;
