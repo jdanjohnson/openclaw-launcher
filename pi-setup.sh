@@ -31,7 +31,7 @@ echo ""
 # ------------------------------------------------------------------
 # 2. System packages
 # ------------------------------------------------------------------
-echo "  [1/6] Installing system dependencies..."
+echo "  [1/8] Installing system dependencies..."
 sudo apt-get update -qq
 sudo apt-get install -y -qq git curl avahi-daemon > /dev/null 2>&1
 echo "         Done."
@@ -41,9 +41,9 @@ echo "         Done."
 # ------------------------------------------------------------------
 if command -v node &> /dev/null; then
   NODE_VER=$(node -v)
-  echo "  [2/6] Node.js already installed: $NODE_VER"
+  echo "  [2/8] Node.js already installed: $NODE_VER"
 else
-  echo "  [2/6] Installing Node.js $NODE_MAJOR..."
+  echo "  [2/8] Installing Node.js $NODE_MAJOR..."
   curl -fsSL https://deb.nodesource.com/setup_${NODE_MAJOR}.x | sudo -E bash - > /dev/null 2>&1
   sudo apt-get install -y -qq nodejs > /dev/null 2>&1
   echo "         Installed: $(node -v)"
@@ -53,9 +53,9 @@ fi
 # 4. OpenClaw CLI
 # ------------------------------------------------------------------
 if command -v openclaw &> /dev/null; then
-  echo "  [3/6] OpenClaw CLI already installed."
+  echo "  [3/8] OpenClaw CLI already installed."
 else
-  echo "  [3/6] Installing OpenClaw CLI..."
+  echo "  [3/8] Installing OpenClaw CLI..."
   if npm list -g openclaw &> /dev/null; then
     echo "         Already in global npm."
   else
@@ -69,12 +69,38 @@ fi
 # ------------------------------------------------------------------
 # 5. Clone / update the launcher repo
 # ------------------------------------------------------------------
+# ------------------------------------------------------------------
+# 4. Install Ollama (local LLM runtime)
+# ------------------------------------------------------------------
+if command -v ollama &> /dev/null; then
+  echo "  [4/8] Ollama already installed."
+else
+  echo "  [4/8] Installing Ollama (local AI runtime)..."
+  curl -fsSL https://ollama.com/install.sh | sh 2>/dev/null || {
+    echo "         Warning: Could not install Ollama."
+    echo "         Chat will run in demo mode."
+  }
+fi
+
+# ------------------------------------------------------------------
+# 5. Pre-pull default model (Phi-3 Mini)
+# ------------------------------------------------------------------
+if command -v ollama &> /dev/null; then
+  echo "  [5/8] Pulling Phi-3 Mini model (this may take a few minutes)..."
+  ollama pull phi3:mini 2>/dev/null || {
+    echo "         Warning: Could not pull phi3:mini."
+    echo "         You can pull it later with: ollama pull phi3:mini"
+  }
+else
+  echo "  [5/8] Skipping model pull (Ollama not available)."
+fi
+
 if [ -d "$INSTALL_DIR/.git" ]; then
-  echo "  [4/6] Updating launcher..."
+  echo "  [6/8] Updating launcher..."
   cd "$INSTALL_DIR"
   git pull --ff-only 2>/dev/null || true
 else
-  echo "  [4/6] Cloning launcher..."
+  echo "  [6/8] Cloning launcher..."
   git clone "$REPO_URL" "$INSTALL_DIR" 2>/dev/null
   cd "$INSTALL_DIR"
 fi
@@ -82,7 +108,7 @@ fi
 # ------------------------------------------------------------------
 # 6. Install dependencies & build UI
 # ------------------------------------------------------------------
-echo "  [5/6] Installing dependencies & building UI..."
+echo "  [7/8] Installing dependencies & building UI..."
 npm install --omit=dev 2>/dev/null
 cd ui
 npm install 2>/dev/null
@@ -93,7 +119,7 @@ echo "         Done."
 # ------------------------------------------------------------------
 # 7. Create systemd service
 # ------------------------------------------------------------------
-echo "  [6/6] Creating systemd service..."
+echo "  [8/8] Creating systemd service..."
 
 SERVICE_FILE="/etc/systemd/system/openclaw-launcher.service"
 sudo tee "$SERVICE_FILE" > /dev/null <<EOF
@@ -111,6 +137,7 @@ Restart=on-failure
 RestartSec=5
 Environment=PORT=3000
 Environment=HOME=$HOME
+Environment=OLLAMA_BASE=http://localhost:11434
 
 [Install]
 WantedBy=multi-user.target

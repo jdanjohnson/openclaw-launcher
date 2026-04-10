@@ -44,6 +44,13 @@ export interface BackendState {
   level: number;
   startedAt: string;
   telegramBot?: { username: string; first_name: string };
+  // V2 Agentic OS fields
+  onboardingComplete: boolean;
+  agentMood: "idle" | "happy" | "thinking" | "talking" | "sleeping";
+  modelProvider: "local" | "cloud";
+  localModel: string;
+  cloudProvider: string;
+  cloudKeySet: boolean;
 }
 
 export interface StatusResponse {
@@ -53,7 +60,23 @@ export interface StatusResponse {
     ip: string;
     openclawInstalled: boolean;
     gatewayRunning: boolean;
+    ollamaOnline: boolean;
+    ollamaModels: { name: string; size: number; modified: string }[];
   };
+}
+
+export interface ChatResponse {
+  response: string;
+  model?: string;
+  provider: "local" | "cloud" | "demo";
+  tokens_per_second?: string | null;
+  ollamaError?: string;
+  cloudProvider?: string;
+}
+
+export interface OllamaStatusResponse {
+  online: boolean;
+  models: { name: string; size: number; modified: string; digest: string }[];
 }
 
 export interface SetupResponse {
@@ -133,6 +156,39 @@ export const api = {
   reset() {
     return request<{ success: boolean }>("/api/reset", {
       method: "POST",
+    });
+  },
+
+  // V2 Agentic OS endpoints
+  onboard(userName: string, agentName: string) {
+    return request<SetupResponse>("/api/onboard", {
+      method: "POST",
+      body: JSON.stringify({ userName, agentName }),
+    });
+  },
+
+  chat(message: string, model?: string) {
+    return request<ChatResponse>("/api/chat", {
+      method: "POST",
+      body: JSON.stringify({ message, model }),
+    });
+  },
+
+  getOllamaStatus() {
+    return request<OllamaStatusResponse>("/api/ollama/status");
+  },
+
+  setMood(mood: string) {
+    return request<{ success: boolean; mood: string }>("/api/mood", {
+      method: "POST",
+      body: JSON.stringify({ mood }),
+    });
+  },
+
+  switchBrain(params: { provider: "local" | "cloud"; localModel?: string; cloudProvider?: string; apiKey?: string }) {
+    return request<SetupResponse>("/api/brain/switch", {
+      method: "POST",
+      body: JSON.stringify(params),
     });
   },
 };
