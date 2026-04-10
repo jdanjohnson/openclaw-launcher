@@ -214,12 +214,9 @@ fi
 
 # ------------------------------------------------------------------
 # 9. Chromium kiosk autostart (boot → localhost:3000)
+#    Supports both X11 and Wayland (labwc on Raspberry Pi OS Bookworm+)
 # ------------------------------------------------------------------
 echo "  Setting up Chromium kiosk autostart..."
-
-# Create autostart directory for the current user
-AUTOSTART_DIR="$HOME/.config/autostart"
-mkdir -p "$AUTOSTART_DIR"
 
 # Create the kiosk launcher script
 KIOSK_SCRIPT="$HOME/.local/bin/openclaw-kiosk.sh"
@@ -233,11 +230,6 @@ for i in $(seq 1 30); do
   fi
   sleep 1
 done
-
-# Disable screen blanking / power saving
-xset s off 2>/dev/null || true
-xset -dpms 2>/dev/null || true
-xset s noblank 2>/dev/null || true
 
 # Kill any existing Chromium instances
 killall chromium-browser 2>/dev/null || true
@@ -260,7 +252,13 @@ else
   echo "Chromium not found" && exit 1
 fi
 
-$CHROME_CMD \
+# Detect display server and add Wayland flag if needed
+CHROME_EXTRA=""
+if [ "$XDG_SESSION_TYPE" = "wayland" ] || [ -n "$WAYLAND_DISPLAY" ]; then
+  CHROME_EXTRA="--ozone-platform=wayland"
+fi
+
+exec $CHROME_CMD \
   --kiosk \
   --noerrdialogs \
   --disable-infobars \
@@ -269,11 +267,16 @@ $CHROME_CMD \
   --no-first-run \
   --start-fullscreen \
   --autoplay-policy=no-user-gesture-required \
+  $CHROME_EXTRA \
   http://localhost:3000
 KIOSKEOF
 chmod +x "$KIOSK_SCRIPT"
 
-# Create the .desktop autostart entry
+# --- Register autostart for the active desktop environment ---
+
+# 1) XDG autostart (.desktop entry — works with lxsession-xdg-autostart)
+AUTOSTART_DIR="$HOME/.config/autostart"
+mkdir -p "$AUTOSTART_DIR"
 cat > "$AUTOSTART_DIR/openclaw-kiosk.desktop" << DESKEOF
 [Desktop Entry]
 Type=Application
@@ -283,6 +286,19 @@ Exec=$KIOSK_SCRIPT
 X-GNOME-Autostart-enabled=true
 X-MATE-Autostart-enabled=true
 DESKEOF
+
+# 2) labwc autostart (Raspberry Pi OS Bookworm+ default compositor)
+LABWC_DIR="$HOME/.config/labwc"
+if [ -d "$LABWC_DIR" ] || pgrep -x labwc > /dev/null 2>&1; then
+  mkdir -p "$LABWC_DIR"
+  # Remove any previous kiosk entry, then append
+  if [ -f "$LABWC_DIR/autostart" ]; then
+    grep -v "openclaw-kiosk" "$LABWC_DIR/autostart" > "$LABWC_DIR/autostart.tmp" || true
+    mv "$LABWC_DIR/autostart.tmp" "$LABWC_DIR/autostart"
+  fi
+  echo "$KIOSK_SCRIPT &" >> "$LABWC_DIR/autostart"
+  echo "         labwc autostart entry added."
+fi
 
 echo "         Kiosk autostart configured."
 echo "         On next boot, Chromium will open http://localhost:3000 in fullscreen."
