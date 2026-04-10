@@ -255,7 +255,7 @@ function gatewayChatSend(message, timeoutMs = 120000) {
     let ws;
     const timer = setTimeout(() => {
       try { ws.close(); } catch { /* ignore */ }
-      resolve(null);
+      resolve(collectedText || null);
     }, timeoutMs);
 
     try {
