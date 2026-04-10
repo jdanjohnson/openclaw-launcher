@@ -282,7 +282,7 @@ function gatewayChatSend(message, timeoutMs = 120000) {
       // Step 1: Respond to connect.challenge with a connect request
       if (data.type === "event" && data.event === "connect.challenge") {
         ws.send(JSON.stringify({
-          type: "req", id: `connect-${gatewayReqId}`, method: "connect",
+          type: "req", id: `connect-${reqId}`, method: "connect",
           params: {
             minProtocol: 3, maxProtocol: 3,
             client: { id: "stationed-launcher", version: "1.0.0", platform: "pi", mode: "webchat" },
