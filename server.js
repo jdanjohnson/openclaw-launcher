@@ -333,7 +333,7 @@ app.post("/api/brain/switch", (req, res) => {
     state.apiProvider = cloudProvider;
     state.apiKeySet = true;
     if (isOpenClawInstalled()) {
-      runSafeCommand("openclaw", ["models", "auth", "paste-token", "--provider", cloudProvider, "--token", apiKey.trim()]);
+      runSafeCommand(openclawBin || "openclaw", ["models", "auth", "paste-token", "--provider", cloudProvider, "--token", apiKey.trim()]);
     }
     const envVarMap = { google: "GOOGLE_API_KEY", anthropic: "ANTHROPIC_API_KEY", openai: "OPENAI_API_KEY" };
     const home = process.env.HOME || "/home/pi";
