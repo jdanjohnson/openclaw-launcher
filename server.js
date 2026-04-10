@@ -228,9 +228,11 @@ app.post("/api/chat", async (req, res) => {
       stream: false, options: { temperature: 0.7, num_predict: 256 },
     }, 120000);
     if (ollamaRes.ok && ollamaRes.data && ollamaRes.data.response) {
-      state.agentMood = "happy";
-      if (!state.achievements.includes("first-message")) { unlockAchievement(state, "first-message", 50); }
-      saveState(state);
+      // Re-load fresh state after the async Ollama call to avoid overwriting concurrent changes
+      const freshState = loadState();
+      freshState.agentMood = "happy";
+      if (!freshState.achievements.includes("first-message")) { unlockAchievement(freshState, "first-message", 50); }
+      saveState(freshState);
       return res.json({
         response: ollamaRes.data.response, model: useModel, provider: "local",
         eval_duration: ollamaRes.data.eval_duration,
