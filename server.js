@@ -269,7 +269,7 @@ function gatewayChatSend(message, timeoutMs = 120000) {
     let reqId = `launcher-${++gatewayReqId}`;
     let collectedText = "";
 
-    ws.on("error", () => { clearTimeout(timer); resolve(null); });
+    ws.on("error", () => { clearTimeout(timer); resolve(collectedText || null); });
 
     ws.on("open", () => {
       // Wait for challenge (gateway sends connect.challenge first)
