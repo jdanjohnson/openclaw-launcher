@@ -30,7 +30,7 @@ echo ""
 # ------------------------------------------------------------------
 # 2. System packages
 # ------------------------------------------------------------------
-echo "  [1/6] Installing system dependencies..."
+echo "  [1/8] Installing system dependencies..."
 sudo apt-get update -qq
 sudo apt-get install -y -qq git curl avahi-daemon > /dev/null 2>&1
 echo "         Done."
@@ -44,13 +44,13 @@ OPENCLAW_BIN=""
 
 # Check if openclaw is already available
 if command -v openclaw &> /dev/null; then
-  echo "  [2/6] OpenClaw CLI already installed: $(openclaw --version 2>/dev/null || echo 'unknown')"
+  echo "  [2/8] OpenClaw CLI already installed: $(openclaw --version 2>/dev/null || echo 'unknown')"
   OPENCLAW_BIN="$(command -v openclaw)"
 elif [ -x "$HOME/.npm-global/bin/openclaw" ]; then
-  echo "  [2/6] OpenClaw CLI found at ~/.npm-global/bin/openclaw"
+  echo "  [2/8] OpenClaw CLI found at ~/.npm-global/bin/openclaw"
   OPENCLAW_BIN="$HOME/.npm-global/bin/openclaw"
 else
-  echo "  [2/6] Installing OpenClaw CLI (this may take a few minutes)..."
+  echo "  [2/8] Installing OpenClaw CLI (this may take a few minutes)..."
   echo "         Using the official installer from https://openclaw.ai/install.sh"
   echo ""
   curl -fsSL https://openclaw.ai/install.sh | bash -s -- --no-onboard 2>&1 | while IFS= read -r line; do
@@ -80,31 +80,57 @@ fi
 # Ensure Node.js is available (the OpenClaw installer installs it,
 # but if it was skipped we need it for the launcher)
 if ! command -v node &> /dev/null; then
-  echo "  [3/6] Installing Node.js..."
+  echo "  [3/8] Installing Node.js..."
   curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - > /dev/null 2>&1
   sudo apt-get install -y -qq nodejs > /dev/null 2>&1
   echo "         Installed: $(node -v)"
 else
-  echo "  [3/6] Node.js already installed: $(node -v)"
+  echo "  [3/8] Node.js already installed: $(node -v)"
 fi
 
 # ------------------------------------------------------------------
-# 4. Clone / update the launcher repo
+# 4. Install Ollama (local LLM runtime)
+# ------------------------------------------------------------------
+if command -v ollama &> /dev/null; then
+  echo "  [4/8] Ollama already installed."
+else
+  echo "  [4/8] Installing Ollama (local AI runtime)..."
+  curl -fsSL https://ollama.com/install.sh | sh 2>/dev/null || {
+    echo "         Warning: Could not install Ollama."
+    echo "         Chat will run in demo mode."
+  }
+fi
+
+# ------------------------------------------------------------------
+# 5. Pre-pull default model (Phi-3 Mini)
+# ------------------------------------------------------------------
+if command -v ollama &> /dev/null; then
+  echo "  [5/8] Pulling Phi-3 Mini model (this may take a few minutes)..."
+  ollama pull phi3:mini 2>/dev/null || {
+    echo "         Warning: Could not pull phi3:mini."
+    echo "         You can pull it later with: ollama pull phi3:mini"
+  }
+else
+  echo "  [5/8] Skipping model pull (Ollama not available)."
+fi
+
+# ------------------------------------------------------------------
+# 6. Clone / update the launcher repo
 # ------------------------------------------------------------------
 if [ -d "$INSTALL_DIR/.git" ]; then
-  echo "  [4/6] Updating launcher..."
+  echo "  [6/8] Updating launcher..."
   cd "$INSTALL_DIR"
   git pull --ff-only 2>/dev/null || true
 else
-  echo "  [4/6] Cloning launcher..."
+  echo "  [6/8] Cloning launcher..."
   git clone "$REPO_URL" "$INSTALL_DIR" 2>/dev/null
   cd "$INSTALL_DIR"
 fi
 
 # ------------------------------------------------------------------
-# 5. Install dependencies & build UI
+# 7. Install dependencies & build UI
 # ------------------------------------------------------------------
-echo "  [5/6] Installing dependencies & building UI..."
+echo "  [7/8] Installing dependencies & building UI..."
 npm install --omit=dev 2>/dev/null
 cd ui
 npm install 2>/dev/null
@@ -113,9 +139,9 @@ cd ..
 echo "         Done."
 
 # ------------------------------------------------------------------
-# 6. Create systemd service
+# 8. Create systemd service
 # ------------------------------------------------------------------
-echo "  [6/6] Creating systemd service..."
+echo "  [8/8] Creating systemd service..."
 
 # Build the PATH for the service — include common openclaw install locations
 SERVICE_PATH="/usr/local/bin:/usr/bin:/bin"
@@ -146,6 +172,7 @@ Restart=on-failure
 RestartSec=5
 Environment=PORT=3000
 Environment=HOME=$HOME
+Environment=OLLAMA_BASE=http://localhost:11434
 Environment=PATH=$SERVICE_PATH
 
 [Install]
@@ -158,7 +185,7 @@ sudo systemctl restart openclaw-launcher
 echo "         Service started."
 
 # ------------------------------------------------------------------
-# 7. Set up mDNS hostname
+# 9. Set up mDNS hostname
 # ------------------------------------------------------------------
 CURRENT_HOSTNAME=$(hostname)
 if [ "$CURRENT_HOSTNAME" != "myagent" ]; then
