@@ -184,8 +184,111 @@ sudo systemctl enable openclaw-launcher
 sudo systemctl restart openclaw-launcher
 echo "         Service started."
 
+# Also try to start OpenClaw gateway on boot if installed
+if [ -n "$OPENCLAW_BIN" ]; then
+  GATEWAY_SERVICE="/etc/systemd/system/openclaw-gateway.service"
+  sudo tee "$GATEWAY_SERVICE" > /dev/null <<GWEOF
+[Unit]
+Description=OpenClaw Gateway
+After=network-online.target openclaw-launcher.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=$USER
+WorkingDirectory=$HOME
+ExecStart=$OPENCLAW_BIN start
+Restart=on-failure
+RestartSec=10
+Environment=HOME=$HOME
+Environment=PATH=$SERVICE_PATH
+
+[Install]
+WantedBy=multi-user.target
+GWEOF
+  sudo systemctl daemon-reload
+  sudo systemctl enable openclaw-gateway 2>/dev/null || true
+  sudo systemctl start openclaw-gateway 2>/dev/null || true
+  echo "         OpenClaw Gateway service created."
+fi
+
 # ------------------------------------------------------------------
-# 9. Set up mDNS hostname
+# 9. Chromium kiosk autostart (boot → localhost:3000)
+# ------------------------------------------------------------------
+echo "  Setting up Chromium kiosk autostart..."
+
+# Create autostart directory for the current user
+AUTOSTART_DIR="$HOME/.config/autostart"
+mkdir -p "$AUTOSTART_DIR"
+
+# Create the kiosk launcher script
+KIOSK_SCRIPT="$HOME/.local/bin/openclaw-kiosk.sh"
+mkdir -p "$HOME/.local/bin"
+cat > "$KIOSK_SCRIPT" << 'KIOSKEOF'
+#!/usr/bin/env bash
+# Wait for the launcher service to be ready
+for i in $(seq 1 30); do
+  if curl -s http://localhost:3000 > /dev/null 2>&1; then
+    break
+  fi
+  sleep 1
+done
+
+# Disable screen blanking / power saving
+xset s off 2>/dev/null || true
+xset -dpms 2>/dev/null || true
+xset s noblank 2>/dev/null || true
+
+# Kill any existing Chromium instances
+killall chromium-browser 2>/dev/null || true
+killall chromium 2>/dev/null || true
+sleep 1
+
+# Clear Chromium crash flags to suppress restore prompts
+CHROMIUM_DIR="$HOME/.config/chromium/Default"
+if [ -f "$CHROMIUM_DIR/Preferences" ]; then
+  sed -i 's/"exited_cleanly":false/"exited_cleanly":true/' "$CHROMIUM_DIR/Preferences" 2>/dev/null || true
+  sed -i 's/"exit_type":"Crashed"/"exit_type":"Normal"/' "$CHROMIUM_DIR/Preferences" 2>/dev/null || true
+fi
+
+# Launch Chromium in kiosk mode
+if command -v chromium-browser &> /dev/null; then
+  CHROME_CMD=chromium-browser
+elif command -v chromium &> /dev/null; then
+  CHROME_CMD=chromium
+else
+  echo "Chromium not found" && exit 1
+fi
+
+$CHROME_CMD \
+  --kiosk \
+  --noerrdialogs \
+  --disable-infobars \
+  --disable-session-crashed-bubble \
+  --disable-restore-session-state \
+  --no-first-run \
+  --start-fullscreen \
+  --autoplay-policy=no-user-gesture-required \
+  http://localhost:3000
+KIOSKEOF
+chmod +x "$KIOSK_SCRIPT"
+
+# Create the .desktop autostart entry
+cat > "$AUTOSTART_DIR/openclaw-kiosk.desktop" << DESKEOF
+[Desktop Entry]
+Type=Application
+Name=OpenClaw Kiosk
+Comment=Open Stationed Agents in fullscreen on boot
+Exec=$KIOSK_SCRIPT
+X-GNOME-Autostart-enabled=true
+X-MATE-Autostart-enabled=true
+DESKEOF
+
+echo "         Kiosk autostart configured."
+echo "         On next boot, Chromium will open http://localhost:3000 in fullscreen."
+
+# ------------------------------------------------------------------
+# 10. Set up mDNS hostname
 # ------------------------------------------------------------------
 CURRENT_HOSTNAME=$(hostname)
 if [ "$CURRENT_HOSTNAME" != "myagent" ]; then
