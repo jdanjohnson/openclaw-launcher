@@ -98,7 +98,11 @@ export default function ChatPanel({ agentName, onClose, onMoodChange }: Props) {
                 <div className="flex items-center gap-1 mt-1.5 text-xs opacity-50">
                   <Cpu className="w-3 h-3" />
                   <span>
-                    {msg.provider === "local"
+                    {msg.provider === "openclaw"
+                      ? "🦞 OpenClaw"
+                      : msg.provider === "ollama"
+                      ? `Ollama${msg.tokensPerSec ? ` · ${msg.tokensPerSec} tok/s` : ""}`
+                      : msg.provider === "local"
                       ? `Local${msg.tokensPerSec ? ` · ${msg.tokensPerSec} tok/s` : ""}`
                       : msg.provider === "demo"
                       ? "Demo mode"
