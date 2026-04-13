@@ -227,13 +227,16 @@ app.get("/api/status", async (_req, res) => {
 // V2: Quick onboarding (30-second flow)
 // -------------------------------------------------------------------
 app.post("/api/onboard", (req, res) => {
-  const { userName, agentName } = req.body;
+  const { userName, agentName, userRole, goals, commStyle } = req.body;
   if (!agentName || agentName.trim().length === 0) {
     return res.status(400).json({ error: "Agent name is required" });
   }
   const state = loadState();
   state.userName = (userName || "").trim();
   state.agentName = agentName.trim();
+  if (userRole) state.userRole = userRole;
+  if (goals) state.goals = goals;
+  if (commStyle) state.commStyle = commStyle;
   state.onboardingComplete = true;
   state.agentMood = "happy";
   state.currentStep = Math.max(state.currentStep, 5);

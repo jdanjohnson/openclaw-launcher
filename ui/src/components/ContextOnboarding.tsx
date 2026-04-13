@@ -3,8 +3,7 @@ import { api } from "../lib/api";
 import type { BackendState } from "../lib/api";
 
 interface Props {
-  onComplete: (state: BackendState) => void;
-  demoMode?: boolean;
+  onComplete: (data: { userName: string; agentName: string; userRole?: string; goals?: string; commStyle?: string }) => void;
 }
 
 interface InterviewStep {
@@ -53,7 +52,7 @@ const INTERVIEW_STEPS: InterviewStep[] = [
   },
 ];
 
-export default function ContextOnboarding({ onComplete, demoMode }: Props) {
+export default function ContextOnboarding({ onComplete }: Props) {
   const [step, setStep] = useState(0);
   const [values, setValues] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -77,32 +76,34 @@ export default function ContextOnboarding({ onComplete, demoMode }: Props) {
           goals: values.goals || "",
           commStyle: values.commStyle || "",
         });
-        if (res.ok && res.data?.state) {
+        if (res.ok) {
           setShowComplete(true);
-          setTimeout(() => onComplete(res.data.state), 1200);
+          setTimeout(() => onComplete({
+            userName: values.userName || "User",
+            agentName: values.agentName || "Atlas",
+            userRole: values.userRole,
+            goals: values.goals,
+            commStyle: values.commStyle,
+          }), 1200);
         } else {
           setShowComplete(true);
           setTimeout(() => onComplete({
             userName: values.userName || "User",
             agentName: values.agentName || "Atlas",
-            onboardingComplete: true,
-            agentMood: "happy",
-            currentStep: 5,
-            level: 1,
-            xp: 50,
-          } as BackendState), 1200);
+            userRole: values.userRole,
+            goals: values.goals,
+            commStyle: values.commStyle,
+          }), 1200);
         }
       } catch {
         setShowComplete(true);
         setTimeout(() => onComplete({
           userName: values.userName || "User",
           agentName: values.agentName || "Atlas",
-          onboardingComplete: true,
-          agentMood: "happy",
-          currentStep: 5,
-          level: 1,
-          xp: 50,
-        } as BackendState), 1200);
+          userRole: values.userRole,
+          goals: values.goals,
+          commStyle: values.commStyle,
+        }), 1200);
       }
     }
   }, [step, values, onComplete]);
@@ -160,14 +161,12 @@ export default function ContextOnboarding({ onComplete, demoMode }: Props) {
 
         <div className="flex items-center gap-4">
           <span className="text-xs text-white/30">{step + 1} of {INTERVIEW_STEPS.length}</span>
-          {(demoMode || true) && (
-            <button
-              onClick={handleSkipAll}
-              className="text-xs text-white/30 hover:text-white/50 transition-colors px-3 py-1 rounded-lg hover:bg-white/5"
-            >
-              Skip all →
-            </button>
-          )}
+          <button
+            onClick={handleSkipAll}
+            className="text-xs text-white/30 hover:text-white/50 transition-colors px-3 py-1 rounded-lg hover:bg-white/5"
+          >
+            Skip all →
+          </button>
         </div>
       </div>
 

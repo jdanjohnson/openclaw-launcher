@@ -93,20 +93,7 @@ function App() {
   }, []);
 
   const handleOnboardingComplete = useCallback((data: { userName: string; agentName: string; userRole?: string; goals?: string; commStyle?: string }) => {
-    // Send to backend
-    api.onboard({
-      userName: data.userName,
-      agentName: data.agentName,
-      userRole: data.userRole,
-      goals: data.goals,
-      commStyle: data.commStyle,
-    }).then((res) => {
-      if (res.ok && res.data.state) {
-        setAgentState({ ...DEFAULT_BACKEND_STATE, ...res.data.state } as BackendState);
-      }
-    });
-
-    // Immediately update local state and go to dashboard
+    // ContextOnboarding already calls api.onboard() — just update local state
     setAgentState((prev) => ({
       ...prev,
       userName: data.userName,
@@ -150,7 +137,7 @@ function App() {
 
   // Context onboarding phase
   if (phase === "onboarding") {
-    return <ContextOnboarding onComplete={handleOnboardingComplete} demoMode={false} />;
+    return <ContextOnboarding onComplete={handleOnboardingComplete} />;
   }
 
   // Dashboard phase
