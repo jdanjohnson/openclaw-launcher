@@ -87,7 +87,19 @@ function App() {
     if (type === "context") {
       setPhase("onboarding");
     } else {
-      // Worker agent -- skip onboarding, go to dashboard with defaults
+      // Worker agent -- persist to backend so refresh doesn't reset
+      api.onboard({ userName: "User", agentName: "Worker" }).then((res) => {
+        if (res.ok && res.data.state) {
+          setAgentState({ ...DEFAULT_BACKEND_STATE, ...res.data.state } as BackendState);
+        }
+      });
+      setAgentState((prev) => ({
+        ...prev,
+        userName: "User",
+        agentName: "Worker",
+        onboardingComplete: true,
+        agentMood: "happy" as const,
+      }));
       setPhase("dashboard");
     }
   }, []);

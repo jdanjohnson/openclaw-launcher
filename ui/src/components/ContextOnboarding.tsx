@@ -62,7 +62,8 @@ export default function ContextOnboarding({ onComplete }: Props) {
   const progress = ((step + 1) / INTERVIEW_STEPS.length) * 100;
   const currentValue = values[currentStep?.field] || "";
 
-  const handleNext = useCallback(async () => {
+  const handleNext = useCallback(async (overrideValues?: Record<string, string>) => {
+    const vals = overrideValues || values;
     if (step < INTERVIEW_STEPS.length - 1) {
       setStep(step + 1);
     } else {
@@ -70,40 +71,36 @@ export default function ContextOnboarding({ onComplete }: Props) {
       setIsSubmitting(true);
       try {
         const res = await api.onboard({
-          userName: values.userName || "User",
-          agentName: values.agentName || "Atlas",
-          userRole: values.userRole || "",
-          goals: values.goals || "",
-          commStyle: values.commStyle || "",
+          userName: vals.userName || "User",
+          agentName: vals.agentName || "Atlas",
+          userRole: vals.userRole || "",
+          goals: vals.goals || "",
+          commStyle: vals.commStyle || "",
         });
+        const completionData = {
+          userName: vals.userName || "User",
+          agentName: vals.agentName || "Atlas",
+          userRole: vals.userRole,
+          goals: vals.goals,
+          commStyle: vals.commStyle,
+        };
         if (res.ok) {
           setShowComplete(true);
-          setTimeout(() => onComplete({
-            userName: values.userName || "User",
-            agentName: values.agentName || "Atlas",
-            userRole: values.userRole,
-            goals: values.goals,
-            commStyle: values.commStyle,
-          }), 1200);
+          setTimeout(() => onComplete(completionData), 1200);
         } else {
           setShowComplete(true);
-          setTimeout(() => onComplete({
-            userName: values.userName || "User",
-            agentName: values.agentName || "Atlas",
-            userRole: values.userRole,
-            goals: values.goals,
-            commStyle: values.commStyle,
-          }), 1200);
+          setTimeout(() => onComplete(completionData), 1200);
         }
       } catch {
         setShowComplete(true);
-        setTimeout(() => onComplete({
-          userName: values.userName || "User",
-          agentName: values.agentName || "Atlas",
-          userRole: values.userRole,
-          goals: values.goals,
-          commStyle: values.commStyle,
-        }), 1200);
+        const completionData = {
+          userName: vals.userName || "User",
+          agentName: vals.agentName || "Atlas",
+          userRole: vals.userRole,
+          goals: vals.goals,
+          commStyle: vals.commStyle,
+        };
+        setTimeout(() => onComplete(completionData), 1200);
       }
     }
   }, [step, values, onComplete]);
@@ -218,15 +215,16 @@ export default function ContextOnboarding({ onComplete }: Props) {
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => {
-                    setValues({ ...values, [currentStep.field]: "" });
-                    handleNext();
+                    const cleared = { ...values, [currentStep.field]: "" };
+                    setValues(cleared);
+                    handleNext(cleared);
                   }}
                   className="text-sm text-white/30 hover:text-white/50 transition-colors px-4 py-2"
                 >
                   Skip
                 </button>
                 <button
-                  onClick={handleNext}
+                  onClick={() => handleNext()}
                   disabled={isSubmitting}
                   className="btn-accent px-6 py-3 text-sm flex items-center gap-2"
                 >
