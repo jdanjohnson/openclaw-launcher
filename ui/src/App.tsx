@@ -154,7 +154,7 @@ function App() {
       {/* Top bar */}
       <div className="relative z-10 flex items-center justify-between px-4 py-2 bg-zinc-950/80 backdrop-blur-sm border-b border-zinc-800/50">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-zinc-200 tracking-wide">STATIONED AGENTS</span>
+          <span className="text-xs font-bold text-zinc-200 tracking-wide">ATOMIC CLAW</span>
           <span className="text-[10px] text-zinc-500">powered by</span>
           <span className="text-xs text-orange-400">{"\uD83E\uDD9E"}OpenClaw</span>
         </div>
