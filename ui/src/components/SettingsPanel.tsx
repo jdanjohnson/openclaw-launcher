@@ -16,10 +16,10 @@ export default function SettingsPanel({ agentState, systemInfo, onClose, onUpdat
   const [confirmReset, setConfirmReset] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [sshHost, setSshHost] = useState(() => {
-    try { const s = localStorage.getItem("stationed-ssh"); return s ? JSON.parse(s).host || "" : ""; } catch { return ""; }
+    try { const s = localStorage.getItem("atomic-claw-ssh"); return s ? JSON.parse(s).host || "" : ""; } catch { return ""; }
   });
   const [sshUser, setSshUser] = useState(() => {
-    try { const s = localStorage.getItem("stationed-ssh"); return s ? JSON.parse(s).user || "" : ""; } catch { return ""; }
+    try { const s = localStorage.getItem("atomic-claw-ssh"); return s ? JSON.parse(s).user || "" : ""; } catch { return ""; }
   });
   const [sshSaved, setSshSaved] = useState(false);
 
@@ -39,7 +39,7 @@ export default function SettingsPanel({ agentState, systemInfo, onClose, onUpdat
   };
 
   const handleSaveSsh = () => {
-    localStorage.setItem("stationed-ssh", JSON.stringify({ host: sshHost, user: sshUser }));
+    localStorage.setItem("atomic-claw-ssh", JSON.stringify({ host: sshHost, user: sshUser }));
     setSshSaved(true);
     setTimeout(() => setSshSaved(false), 2000);
   };
