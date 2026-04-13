@@ -160,10 +160,10 @@ export const api = {
   },
 
   // V2 Agentic OS endpoints
-  onboard(userName: string, agentName: string) {
+  onboard(params: { userName: string; agentName: string; userRole?: string; goals?: string; commStyle?: string }) {
     return request<SetupResponse>("/api/onboard", {
       method: "POST",
-      body: JSON.stringify({ userName, agentName }),
+      body: JSON.stringify(params),
     });
   },
 

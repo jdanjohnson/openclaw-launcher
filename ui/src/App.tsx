@@ -3,38 +3,13 @@ import "./App.css";
 import { api } from "./lib/api";
 import type { BackendState } from "./lib/api";
 import BootSequence from "./components/BootSequence";
-import QuickOnboarding from "./components/QuickOnboarding";
-import TamagotchiAgent from "./components/TamagotchiAgent";
-import DesktopDock from "./components/DesktopDock";
-import type { PanelId } from "./components/DesktopDock";
+import AgentSelection from "./components/AgentSelection";
+import ContextOnboarding from "./components/ContextOnboarding";
+import Dashboard from "./components/Dashboard";
 import ChatPanel from "./components/ChatPanel";
-import BrainPanel from "./components/BrainPanel";
-import SkillsPanel from "./components/SkillsPanel";
 import SettingsPanel from "./components/SettingsPanel";
 
-// Re-export for backward compat with old pages that may import from App
-export type Page = "dashboard" | "onboarding" | "chat" | "templates" | "achievements" | "settings";
-export interface AgentState {
-  agentName: string;
-  userName: string;
-  userRole: string;
-  interests: string[];
-  goals: string;
-  commStyle: string;
-  templateId: string;
-  apiProvider: string;
-  apiKeySet: boolean;
-  telegramConnected: boolean;
-  gatewayRunning: boolean;
-  achievements: string[];
-  completedSteps: string[];
-  currentStep: number;
-  level: number;
-  xp: number;
-  maxXp: number;
-}
-
-type AppPhase = "boot" | "onboarding" | "desktop";
+type AppPhase = "boot" | "select" | "onboarding" | "dashboard";
 
 const DEFAULT_BACKEND_STATE: Partial<BackendState> = {
   agentName: "",
@@ -65,7 +40,8 @@ function App() {
   const [phase, setPhase] = useState<AppPhase>("boot");
   const [agentState, setAgentState] = useState<BackendState>(DEFAULT_BACKEND_STATE as BackendState);
   const [systemInfo, setSystemInfo] = useState({ hostname: "", ip: "", ollamaOnline: false, openclawInstalled: false });
-  const [activePanel, setActivePanel] = useState<PanelId>(null);
+  const [showChat, setShowChat] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [apiLoaded, setApiLoaded] = useState(false);
   const [bootAnimDone, setBootAnimDone] = useState(false);
   const apiStateRef = useRef<BackendState | null>(null);
@@ -91,14 +67,14 @@ function App() {
     });
   }, []);
 
-  // Transition out of boot only when BOTH animation is done AND API has responded
+  // Transition out of boot when both animation and API are done
   useEffect(() => {
     if (bootAnimDone && apiLoaded && phase === "boot") {
       const state = apiStateRef.current;
       if (state?.onboardingComplete || (state?.currentStep ?? 0) >= 5) {
-        setPhase("desktop");
+        setPhase("dashboard");
       } else {
-        setPhase("onboarding");
+        setPhase("select");
       }
     }
   }, [bootAnimDone, apiLoaded, phase]);
@@ -107,11 +83,40 @@ function App() {
     setBootAnimDone(true);
   }, []);
 
-  const handleOnboardingComplete = useCallback((state: BackendState) => {
-    // Apply the state returned by /api/onboard immediately so the desktop
-    // renders with correct agentName, agentMood, xp, etc. instead of stale defaults.
-    setAgentState({ ...DEFAULT_BACKEND_STATE, ...state } as BackendState);
-    setPhase("desktop");
+  const handleAgentSelect = useCallback((type: "context" | "worker") => {
+    if (type === "context") {
+      setPhase("onboarding");
+    } else {
+      // Worker agent -- persist to backend so refresh doesn't reset
+      api.onboard({ userName: "User", agentName: "Worker" }).then((res) => {
+        if (res.ok && res.data.state) {
+          setAgentState({ ...DEFAULT_BACKEND_STATE, ...res.data.state } as BackendState);
+        }
+      });
+      setAgentState((prev) => ({
+        ...prev,
+        userName: "User",
+        agentName: "Worker",
+        onboardingComplete: true,
+        agentMood: "happy" as const,
+      }));
+      setPhase("dashboard");
+    }
+  }, []);
+
+  const handleOnboardingComplete = useCallback((data: { userName: string; agentName: string; userRole?: string; goals?: string; commStyle?: string }) => {
+    // ContextOnboarding already calls api.onboard() — just update local state
+    setAgentState((prev) => ({
+      ...prev,
+      userName: data.userName,
+      agentName: data.agentName,
+      userRole: data.userRole || prev.userRole,
+      goals: data.goals || prev.goals,
+      commStyle: data.commStyle || prev.commStyle,
+      onboardingComplete: true,
+      agentMood: "happy" as const,
+    }));
+    setPhase("dashboard");
   }, []);
 
   const updateState = useCallback((updates: Partial<BackendState>) => {
@@ -127,12 +132,9 @@ function App() {
     api.reset();
     localStorage.removeItem("openclaw-state");
     setAgentState(DEFAULT_BACKEND_STATE as BackendState);
-    setPhase("onboarding");
-    setActivePanel(null);
-  }, []);
-
-  const handlePanelToggle = useCallback((panel: PanelId) => {
-    setActivePanel(panel);
+    setPhase("select");
+    setShowChat(false);
+    setShowSettings(false);
   }, []);
 
   // Boot phase
@@ -140,95 +142,44 @@ function App() {
     return <BootSequence onComplete={handleBootComplete} />;
   }
 
-  // Onboarding phase
-  if (phase === "onboarding") {
-    return <QuickOnboarding onComplete={handleOnboardingComplete} />;
+  // Agent selection phase
+  if (phase === "select") {
+    return <AgentSelection onSelect={handleAgentSelect} />;
   }
 
-  // Desktop phase
+  // Context onboarding phase
+  if (phase === "onboarding") {
+    return <ContextOnboarding onComplete={handleOnboardingComplete} />;
+  }
+
+  // Dashboard phase
   return (
-    <div className="h-screen bg-zinc-950 text-zinc-100 overflow-hidden flex flex-col relative">
-      {/* Background gradient */}
-      <div className="absolute inset-0 bg-gradient-to-b from-zinc-950 via-zinc-900/30 to-zinc-950 pointer-events-none" />
+    <>
+      <Dashboard
+        agentName={agentState.agentName || "Agent"}
+        userName={agentState.userName || "User"}
+        onOpenChat={() => setShowChat(true)}
+        onOpenSettings={() => setShowSettings(true)}
+      />
 
-      {/* Top bar */}
-      <div className="relative z-10 flex items-center justify-between px-4 py-2 bg-zinc-950/80 backdrop-blur-sm border-b border-zinc-800/50">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-zinc-200 tracking-wide">ATOMIC CLAW</span>
-          <span className="text-[10px] text-zinc-500">powered by</span>
-          <span className="text-xs text-orange-400">{"\uD83E\uDD9E"}OpenClaw</span>
-        </div>
-        <div className="flex items-center gap-3 text-xs text-zinc-600">
-          <span>{agentState.userName && `${agentState.userName}'s Pi`}</span>
-          <div className={`w-1.5 h-1.5 rounded-full ${systemInfo.ollamaOnline ? "bg-emerald-400" : "bg-zinc-600"}`} />
-        </div>
-      </div>
-
-      {/* Main desktop area - agent center stage */}
-      <div className="relative z-10 flex-1 flex flex-col items-center justify-center">
-        <TamagotchiAgent
-          mood={agentState.agentMood || "idle"}
-          name={agentState.agentName || "Agent"}
-          onClick={() => handlePanelToggle(activePanel === "chat" ? null : "chat")}
-        />
-
-        {/* XP bar */}
-        {agentState.xp > 0 && (
-          <div className="mt-4 w-40">
-            <div className="flex items-center justify-between text-xs text-zinc-500 mb-1">
-              <span>Level {agentState.level}</span>
-              <span>{agentState.xp} XP</span>
-            </div>
-            <div className="w-full h-1 bg-zinc-800 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-orange-500 to-red-500 rounded-full transition-all duration-500"
-                style={{ width: `${Math.min(100, (agentState.xp / 175) * 100)}%` }}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Quick hint */}
-        <p className="mt-6 text-xs text-zinc-600 animate-pulse">
-          {activePanel === null ? "Tap me to chat" : ""}
-        </p>
-      </div>
-
-      {/* Panels */}
-      {activePanel === "chat" && (
+      {showChat && (
         <ChatPanel
           agentName={agentState.agentName || "Agent"}
-          onClose={() => setActivePanel(null)}
+          onClose={() => setShowChat(false)}
           onMoodChange={handleMoodChange}
         />
       )}
-      {activePanel === "brain" && (
-        <BrainPanel
-          agentState={agentState}
-          onClose={() => setActivePanel(null)}
-          onUpdate={updateState}
-        />
-      )}
-      {activePanel === "skills" && (
-        <SkillsPanel
-          agentState={agentState}
-          onClose={() => setActivePanel(null)}
-          onUpdate={updateState}
-        />
-      )}
-      {activePanel === "settings" && (
+
+      {showSettings && (
         <SettingsPanel
           agentState={agentState}
           systemInfo={systemInfo}
-          onClose={() => setActivePanel(null)}
+          onClose={() => setShowSettings(false)}
           onUpdate={updateState}
           onReset={handleReset}
         />
       )}
-
-      {/* Desktop dock */}
-      <DesktopDock activePanel={activePanel} onPanelToggle={handlePanelToggle} />
-    </div>
+    </>
   );
 }
 
