@@ -11,51 +11,62 @@ export default function BootSequence({ onComplete }: Props) {
 
   useEffect(() => {
     const timers = [
-      setTimeout(() => setPhase(1), 800),
-      setTimeout(() => setPhase(2), 2200),
-      setTimeout(() => setPhase(3), 3500),
-      setTimeout(() => onCompleteRef.current(), 4500),
+      setTimeout(() => setPhase(1), 200),
+      setTimeout(() => setPhase(2), 1000),
+      setTimeout(() => setPhase(3), 1600),
+      setTimeout(() => onCompleteRef.current(), 2000),
     ];
     return () => timers.forEach(clearTimeout);
   }, []);
 
   return (
-    <div className="fixed inset-0 bg-black flex items-center justify-center z-50">
-      <div className="flex flex-col items-center gap-6">
+    <div className="fixed inset-0 bg-black flex items-center justify-center z-50 overflow-hidden">
+      {/* Ambient glow */}
+      <div
+        className="absolute w-[600px] h-[600px] rounded-full transition-all duration-1000"
+        style={{
+          background: "radial-gradient(circle, rgba(242,84,31,0.15) 0%, transparent 70%)",
+          opacity: phase >= 1 ? 1 : 0,
+          transform: phase >= 2 ? "scale(1.5)" : "scale(0.5)",
+        }}
+      />
+
+      <div className="flex flex-col items-center gap-6 relative z-10">
         {/* Logo */}
         <div
-          className={`transition-all duration-1000 ${
-            phase >= 1 ? "opacity-100 scale-100" : "opacity-0 scale-75"
-          }`}
+          className="transition-all duration-700 ease-out"
+          style={{
+            opacity: phase >= 1 ? 1 : 0,
+            transform: phase >= 1 ? "scale(1) translateY(0)" : "scale(0.5) translateY(20px)",
+          }}
         >
-          <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center shadow-lg shadow-orange-500/30">
-            <span className="text-3xl">🦞</span>
+          <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-[rgb(242,84,31)] to-[rgb(200,50,10)] flex items-center justify-center shadow-[0_0_60px_rgba(242,84,31,0.4)] transition-shadow duration-1000">
+            <span className="text-4xl">🦞</span>
           </div>
         </div>
 
-        {/* Text */}
+        {/* Brand */}
         <div
-          className={`transition-all duration-700 ${
-            phase >= 2 ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
-          }`}
+          className="transition-all duration-500 text-center"
+          style={{
+            opacity: phase >= 2 ? 1 : 0,
+            transform: phase >= 2 ? "translateY(0)" : "translateY(10px)",
+          }}
         >
-          <p className="text-zinc-400 text-sm font-mono">
-            {phase < 3 ? "Waking up..." : "Ready"}
-          </p>
+          <h1 className="text-2xl font-bold text-white tracking-tight">Atomic Claw</h1>
+          <p className="text-xs text-white/40 mt-1 tracking-widest uppercase">Agent Operating System</p>
         </div>
 
-        {/* Loading dots */}
-        {phase >= 2 && phase < 3 && (
-          <div className="flex gap-1.5">
-            {[0, 1, 2].map((i) => (
-              <div
-                key={i}
-                className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"
-                style={{ animationDelay: `${i * 200}ms` }}
-              />
-            ))}
-          </div>
-        )}
+        {/* Loading bar */}
+        <div
+          className="w-48 h-0.5 bg-white/10 rounded-full overflow-hidden transition-opacity duration-300"
+          style={{ opacity: phase >= 2 ? 1 : 0 }}
+        >
+          <div
+            className="h-full bg-gradient-to-r from-[rgb(242,84,31)] to-[rgb(255,120,60)] rounded-full transition-all duration-700 ease-out"
+            style={{ width: phase >= 3 ? "100%" : phase >= 2 ? "60%" : "0%" }}
+          />
+        </div>
       </div>
     </div>
   );
