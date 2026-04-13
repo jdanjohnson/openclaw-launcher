@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { api } from "../lib/api";
 import type { BackendState } from "../lib/api";
 
@@ -6,107 +6,108 @@ interface Props {
   onComplete: (data: { userName: string; agentName: string; userRole?: string; goals?: string; commStyle?: string }) => void;
 }
 
-interface InterviewStep {
-  id: string;
-  question: string;
-  placeholder: string;
-  hint: string;
-  field: string;
+interface ChatMessage {
+  role: "agent" | "user";
+  text: string;
 }
 
-const INTERVIEW_STEPS: InterviewStep[] = [
-  {
-    id: "name",
-    question: "What should we call you?",
-    placeholder: "e.g. Alex, Jordan, Sam...",
-    hint: "Your name helps personalize your agent experience",
-    field: "userName",
-  },
-  {
-    id: "agent",
-    question: "Name your context agent",
-    placeholder: "e.g. Atlas, Nova, Cortex...",
-    hint: "This is your main AI agent — your co-founder in everything",
-    field: "agentName",
-  },
-  {
-    id: "role",
-    question: "What's your role?",
-    placeholder: "e.g. Founder, CTO, Product Lead, Engineer...",
-    hint: "Helps your agent understand how to best support you",
-    field: "userRole",
-  },
-  {
-    id: "focus",
-    question: "What are you building or working on?",
-    placeholder: "e.g. An AI-powered sales tool, a marketplace...",
-    hint: "Your agent will use this context to help you plan and execute",
-    field: "goals",
-  },
-  {
-    id: "style",
-    question: "How do you prefer to communicate?",
-    placeholder: "e.g. Direct and concise, Detailed and thorough...",
-    hint: "Your agent adapts its communication style to match yours",
-    field: "commStyle",
-  },
+const INTERVIEW_QUESTIONS = [
+  "What should I call you?",
+  "Nice to meet you! What do you do — what's your role or title?",
+  "Cool! So tell me — what are you working on right now? What's the big project or idea?",
+  "Love it. How do you like to communicate? Are you more of a \"just give me the bullet points\" person or do you like detailed breakdowns?",
+  "Last one — what's the #1 thing you'd want an AI co-founder to help you with this week?",
 ];
 
 export default function ContextOnboarding({ onComplete }: Props) {
-  const [step, setStep] = useState(0);
-  const [values, setValues] = useState<Record<string, string>>({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    {
+      role: "agent",
+      text: "Hey there! 👋 I'm going to be your context agent — think of me as your AI co-founder who knows everything about you and your work.\n\nThis quick interview takes about 5 minutes. I'll ask you a few questions to get ramped up on who you are and what you're building.\n\nAt the end, you'll get to explore a live demo of your personalized agent dashboard — complete with your fleet, skills library, and inspiration board. Let's go! 🚀",
+    },
+    {
+      role: "agent",
+      text: INTERVIEW_QUESTIONS[0],
+    },
+  ]);
+  const [input, setInput] = useState("");
+  const [questionIndex, setQuestionIndex] = useState(0);
+  const [answers, setAnswers] = useState<string[]>([]);
+  const [isTyping, setIsTyping] = useState(false);
   const [showComplete, setShowComplete] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
-  const currentStep = INTERVIEW_STEPS[step];
-  const progress = ((step + 1) / INTERVIEW_STEPS.length) * 100;
-  const currentValue = values[currentStep?.field] || "";
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, isTyping]);
 
-  const handleNext = useCallback(async (overrideValues?: Record<string, string>) => {
-    const vals = overrideValues || values;
-    if (step < INTERVIEW_STEPS.length - 1) {
-      setStep(step + 1);
+  const progress = ((questionIndex + 1) / INTERVIEW_QUESTIONS.length) * 100;
+
+  const handleSend = useCallback(async () => {
+    const text = input.trim();
+    if (!text || isTyping) return;
+
+    setInput("");
+    const newAnswers = [...answers, text];
+    setAnswers(newAnswers);
+    setMessages((prev) => [...prev, { role: "user", text }]);
+
+    const nextQ = questionIndex + 1;
+
+    if (nextQ < INTERVIEW_QUESTIONS.length) {
+      setIsTyping(true);
+      setTimeout(() => {
+        setIsTyping(false);
+        setMessages((prev) => [...prev, { role: "agent", text: INTERVIEW_QUESTIONS[nextQ] }]);
+        setQuestionIndex(nextQ);
+      }, 800 + Math.random() * 600);
     } else {
-      // Final step — submit
-      setIsSubmitting(true);
-      try {
-        const res = await api.onboard({
-          userName: vals.userName || "User",
-          agentName: vals.agentName || "Atlas",
-          userRole: vals.userRole || "",
-          goals: vals.goals || "",
-          commStyle: vals.commStyle || "",
-        });
-        const completionData = {
-          userName: vals.userName || "User",
-          agentName: vals.agentName || "Atlas",
-          userRole: vals.userRole,
-          goals: vals.goals,
-          commStyle: vals.commStyle,
-        };
-        if (res.ok) {
-          setShowComplete(true);
-          setTimeout(() => onComplete(completionData), 1200);
-        } else {
-          setShowComplete(true);
-          setTimeout(() => onComplete(completionData), 1200);
+      setIsTyping(true);
+      const userName = newAnswers[0] || "User";
+      const userRole = newAnswers[1] || "";
+      const goals = newAnswers[2] || "";
+      const commStyle = newAnswers[3] || "";
+      const weeklyGoal = newAnswers[4] || "";
+
+      setTimeout(async () => {
+        setIsTyping(false);
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "agent",
+            text: `Amazing, ${userName}! I've got a great picture of who you are and what you need. I'm setting up your personalized workspace now — this is going to be fun! 🦞`,
+          },
+        ]);
+
+        try {
+          await api.onboard({
+            userName,
+            agentName: "Atlas",
+            userRole,
+            goals: `${goals}${weeklyGoal ? ` | Weekly focus: ${weeklyGoal}` : ""}`,
+            commStyle,
+          });
+        } catch {
+          // continue anyway
         }
-      } catch {
-        setShowComplete(true);
-        const completionData = {
-          userName: vals.userName || "User",
-          agentName: vals.agentName || "Atlas",
-          userRole: vals.userRole,
-          goals: vals.goals,
-          commStyle: vals.commStyle,
-        };
-        setTimeout(() => onComplete(completionData), 1200);
-      }
+
+        setTimeout(() => {
+          setShowComplete(true);
+          setTimeout(() => {
+            onComplete({
+              userName,
+              agentName: "Atlas",
+              userRole,
+              goals: `${goals}${weeklyGoal ? ` | Weekly focus: ${weeklyGoal}` : ""}`,
+              commStyle,
+            });
+          }, 1500);
+        }, 1200);
+      }, 1000);
     }
-  }, [step, values, onComplete]);
+  }, [input, isTyping, answers, questionIndex, onComplete]);
 
   const handleSkipAll = useCallback(() => {
-    // Demo mode — skip straight to dashboard with defaults
     const demoState = {
       userName: "Demo User",
       agentName: "Atlas",
@@ -122,54 +123,58 @@ export default function ContextOnboarding({ onComplete }: Props) {
     api.onboard({
       userName: demoState.userName,
       agentName: demoState.agentName,
+      userRole: demoState.userRole,
+      goals: demoState.goals,
+      commStyle: demoState.commStyle,
     }).catch(() => {});
     onComplete(demoState);
   }, [onComplete]);
 
   if (showComplete) {
     return (
-      <div className="fixed inset-0 bg-black bg-mesh flex items-center justify-center z-50">
+      <div className="fixed inset-0 bg-mesh flex items-center justify-center z-50">
         <div className="text-center animate-scale-in">
-          <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-[rgb(242,84,31)] to-[rgb(200,50,10)] flex items-center justify-center mx-auto mb-6 shadow-[0_0_60px_rgba(242,84,31,0.4)]">
-            <span className="text-3xl">🦞</span>
+          <div className="w-28 h-28 rounded-[32px] bg-gradient-to-br from-[rgb(242,84,31)] to-[rgb(200,50,10)] flex items-center justify-center mx-auto mb-8 shadow-[0_0_80px_rgba(242,84,31,0.3)] animate-bounce-slow">
+            <span className="text-5xl">🦞</span>
           </div>
-          <h2 className="text-2xl font-bold text-white mb-2">
-            {values.agentName || "Atlas"} is ready
-          </h2>
-          <p className="text-white/40 text-sm">Initializing your workspace...</p>
+          <h2 className="text-3xl font-black text-gray-900 mb-3">Atlas is ready!</h2>
+          <p className="text-lg text-gray-400">Loading your workspace...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-mesh flex flex-col z-50 overflow-hidden">
-      {/* Ambient glow */}
-      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[500px] h-[500px] rounded-full bg-[rgba(242,84,31,0.06)] blur-[100px] pointer-events-none" />
+    <div className="fixed inset-0 bg-mesh flex flex-col z-50 overflow-hidden">
+      <div className="absolute top-1/4 left-1/3 w-[500px] h-[500px] rounded-full bg-[rgba(242,84,31,0.08)] blur-[120px] pointer-events-none" />
+      <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] rounded-full bg-[rgba(242,84,31,0.05)] blur-[100px] pointer-events-none" />
 
-      {/* Top bar with progress */}
-      <div className="relative z-10 flex items-center justify-between px-6 py-4">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[rgb(242,84,31)] to-[rgb(200,50,10)] flex items-center justify-center">
-            <span className="text-sm">🦞</span>
+      {/* Top bar */}
+      <div className="relative z-10 flex items-center justify-between px-8 py-5">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[rgb(242,84,31)] to-[rgb(200,50,10)] flex items-center justify-center shadow-[0_0_20px_rgba(242,84,31,0.2)]">
+            <span className="text-lg">🦞</span>
           </div>
-          <span className="text-sm font-semibold text-white/80">Context Setup</span>
+          <div>
+            <span className="text-base font-bold text-gray-800">Context Interview</span>
+            <p className="text-xs text-gray-400">~5 min to get ramped up</p>
+          </div>
         </div>
 
-        <div className="flex items-center gap-4">
-          <span className="text-xs text-white/30">{step + 1} of {INTERVIEW_STEPS.length}</span>
+        <div className="flex items-center gap-5">
+          <span className="text-sm text-gray-400 font-medium">{questionIndex + 1} of {INTERVIEW_QUESTIONS.length}</span>
           <button
             onClick={handleSkipAll}
-            className="text-xs text-white/30 hover:text-white/50 transition-colors px-3 py-1 rounded-lg hover:bg-white/5"
+            className="text-sm text-gray-400 hover:text-gray-600 transition-colors px-4 py-2 rounded-xl hover:bg-black/5 font-medium"
           >
-            Skip all →
+            Skip to demo →
           </button>
         </div>
       </div>
 
       {/* Progress bar */}
-      <div className="relative z-10 px-6">
-        <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+      <div className="relative z-10 px-8">
+        <div className="w-full h-2 bg-black/5 rounded-full overflow-hidden">
           <div
             className="h-full bg-gradient-to-r from-[rgb(242,84,31)] to-[rgb(255,120,60)] rounded-full transition-all duration-500 ease-out relative"
             style={{ width: `${progress}%` }}
@@ -179,86 +184,77 @@ export default function ContextOnboarding({ onComplete }: Props) {
         </div>
       </div>
 
-      {/* Interview content */}
-      <div className="flex-1 flex items-center justify-center px-6">
-        <div className="max-w-lg w-full">
-          <div key={step} className="animate-fade-up">
-            {/* Question */}
-            <h2 className="text-3xl font-bold text-white mb-3 tracking-tight">
-              {currentStep.question}
-            </h2>
-            <p className="text-sm text-white/40 mb-8">{currentStep.hint}</p>
-
-            {/* Input */}
-            <input
-              type="text"
-              value={currentValue}
-              onChange={(e) => setValues({ ...values, [currentStep.field]: e.target.value })}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && currentValue.trim()) handleNext();
-              }}
-              placeholder={currentStep.placeholder}
-              autoFocus
-              className="w-full glass-input px-5 py-4 text-lg"
-            />
-
-            {/* Action buttons */}
-            <div className="flex items-center justify-between mt-6">
-              <button
-                onClick={() => step > 0 && setStep(step - 1)}
-                className="text-sm text-white/30 hover:text-white/50 transition-colors disabled:opacity-20"
-                disabled={step === 0}
+      {/* Chat area */}
+      <div className="flex-1 overflow-y-auto px-8 py-6 glass-scroll">
+        <div className="max-w-2xl mx-auto space-y-5">
+          {messages.map((msg, i) => (
+            <div
+              key={i}
+              className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} animate-fade-up`}
+            >
+              {msg.role === "agent" && (
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[rgb(242,84,31)] to-[rgb(200,50,10)] flex items-center justify-center mr-3 flex-shrink-0 shadow-md">
+                  <span className="text-sm">🦞</span>
+                </div>
+              )}
+              <div
+                className={`max-w-[75%] rounded-2xl px-5 py-4 text-base leading-relaxed ${
+                  msg.role === "user"
+                    ? "bg-[rgb(242,84,31)] text-white rounded-br-lg shadow-[0_4px_20px_rgba(242,84,31,0.2)]"
+                    : "glass text-gray-700 rounded-bl-lg"
+                }`}
               >
-                ← Back
-              </button>
-
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => {
-                    const cleared = { ...values, [currentStep.field]: "" };
-                    setValues(cleared);
-                    handleNext(cleared);
-                  }}
-                  className="text-sm text-white/30 hover:text-white/50 transition-colors px-4 py-2"
-                >
-                  Skip
-                </button>
-                <button
-                  onClick={() => handleNext()}
-                  disabled={isSubmitting}
-                  className="btn-accent px-6 py-3 text-sm flex items-center gap-2"
-                >
-                  {isSubmitting ? (
-                    <span className="animate-pulse">Setting up...</span>
-                  ) : step === INTERVIEW_STEPS.length - 1 ? (
-                    "Launch Agent"
-                  ) : (
-                    <>
-                      Continue
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-                      </svg>
-                    </>
-                  )}
-                </button>
+                <p className="whitespace-pre-wrap">{msg.text}</p>
               </div>
             </div>
-          </div>
+          ))}
+
+          {isTyping && (
+            <div className="flex justify-start animate-fade-up">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[rgb(242,84,31)] to-[rgb(200,50,10)] flex items-center justify-center mr-3 flex-shrink-0 shadow-md">
+                <span className="text-sm">🦞</span>
+              </div>
+              <div className="glass rounded-2xl rounded-bl-lg px-5 py-4">
+                <div className="flex gap-2">
+                  {[0, 1, 2].map((i) => (
+                    <div
+                      key={i}
+                      className="w-2.5 h-2.5 rounded-full bg-[rgb(242,84,31)] animate-bounce"
+                      style={{ animationDelay: `${i * 150}ms` }}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div ref={bottomRef} />
         </div>
       </div>
 
-      {/* Step indicators */}
-      <div className="relative z-10 flex items-center justify-center gap-2 pb-8">
-        {INTERVIEW_STEPS.map((_, i) => (
-          <div
-            key={i}
-            className="h-1 rounded-full transition-all duration-300"
-            style={{
-              width: i === step ? "24px" : "8px",
-              background: i <= step ? "rgb(242, 84, 31)" : "rgba(255,255,255,0.1)",
-            }}
+      {/* Input */}
+      <div className="relative z-10 px-8 pb-8 pt-4">
+        <div className="max-w-2xl mx-auto flex gap-3">
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSend()}
+            placeholder="Type your answer..."
+            autoFocus
+            disabled={isTyping}
+            className="flex-1 glass-input px-6 py-4 text-lg"
           />
-        ))}
+          <button
+            onClick={handleSend}
+            disabled={!input.trim() || isTyping}
+            className="btn-accent px-6 py-4 text-base disabled:opacity-30"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
   );

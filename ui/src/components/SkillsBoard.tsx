@@ -113,41 +113,41 @@ export default function SkillsBoard({ onClose }: Props) {
   });
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-4xl max-h-[85vh] glass rounded-2xl flex flex-col animate-scale-in overflow-hidden">
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-6">
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative z-10 w-full max-w-4xl max-h-[85vh] glass rounded-3xl flex flex-col animate-scale-in overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-white/5">
+        <div className="flex items-center justify-between p-6 border-b border-black/5">
           <div>
-            <h2 className="text-lg font-semibold text-white">Skills Board</h2>
-            <p className="text-xs text-white/40 mt-0.5">Browse and use skills created by your team</p>
+            <h2 className="text-xl font-bold text-gray-900">Skills Board</h2>
+            <p className="text-sm text-gray-400 mt-1">Browse and use skills created by your team</p>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors">
-            <svg className="w-4 h-4 text-white/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <button onClick={onClose} className="w-10 h-10 rounded-xl bg-black/5 hover:bg-black/10 flex items-center justify-center transition-colors">
+            <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
         {/* Toolbar */}
-        <div className="flex items-center gap-3 p-4 border-b border-white/5 flex-wrap">
+        <div className="flex items-center gap-4 p-5 border-b border-black/5 flex-wrap">
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search skills..."
-            className="glass-input px-3 py-1.5 text-sm w-48"
+            className="glass-input px-4 py-2 text-sm w-52"
           />
           <div className="flex items-center gap-1 overflow-x-auto">
             {CATEGORIES.map((cat) => (
               <button
                 key={cat}
                 onClick={() => setCategory(cat)}
-                className="px-3 py-1.5 text-xs rounded-lg whitespace-nowrap transition-all"
+                className="px-4 py-2 text-sm rounded-xl whitespace-nowrap transition-all font-medium"
                 style={{
-                  background: category === cat ? "rgba(242,84,31,0.2)" : "rgba(255,255,255,0.03)",
-                  color: category === cat ? "rgb(242,84,31)" : "rgba(255,255,255,0.4)",
-                  border: `1px solid ${category === cat ? "rgba(242,84,31,0.3)" : "rgba(255,255,255,0.05)"}`,
+                  background: category === cat ? "rgba(242,84,31,0.15)" : "rgba(0,0,0,0.03)",
+                  color: category === cat ? "rgb(242,84,31)" : "rgba(0,0,0,0.4)",
+                  border: `1px solid ${category === cat ? "rgba(242,84,31,0.25)" : "rgba(0,0,0,0.05)"}`,
                 }}
               >
                 {cat}
@@ -156,11 +156,11 @@ export default function SkillsBoard({ onClose }: Props) {
           </div>
           <button
             onClick={() => setShowOwn(!showOwn)}
-            className="ml-auto text-xs px-3 py-1.5 rounded-lg transition-all"
+            className="ml-auto text-sm px-4 py-2 rounded-xl transition-all font-medium"
             style={{
-              background: showOwn ? "rgba(242,84,31,0.2)" : "rgba(255,255,255,0.03)",
-              color: showOwn ? "rgb(242,84,31)" : "rgba(255,255,255,0.4)",
-              border: `1px solid ${showOwn ? "rgba(242,84,31,0.3)" : "rgba(255,255,255,0.05)"}`,
+              background: showOwn ? "rgba(242,84,31,0.15)" : "rgba(0,0,0,0.03)",
+              color: showOwn ? "rgb(242,84,31)" : "rgba(0,0,0,0.4)",
+              border: `1px solid ${showOwn ? "rgba(242,84,31,0.25)" : "rgba(0,0,0,0.05)"}`,
             }}
           >
             My Skills
@@ -168,33 +168,34 @@ export default function SkillsBoard({ onClose }: Props) {
         </div>
 
         {/* Skills grid */}
-        <div className="flex-1 overflow-y-auto glass-scroll p-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="flex-1 overflow-y-auto glass-scroll p-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {filtered.map((skill) => (
               <div
                 key={skill.id}
-                className="p-4 rounded-xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/10 transition-all group cursor-pointer"
+                className="p-5 rounded-2xl border-2 border-white/60 bg-white/50 hover:bg-white/70 hover:border-white/80 transition-all group cursor-pointer hover:shadow-lg hover:scale-[1.02]"
+                style={{ backdropFilter: "blur(12px)" }}
               >
-                <div className="flex items-start justify-between mb-2">
+                <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-semibold text-white group-hover:text-[rgb(242,84,31)] transition-colors">
+                    <h3 className="text-base font-bold text-gray-900 group-hover:text-[rgb(242,84,31)] transition-colors">
                       {skill.name}
                     </h3>
                     {skill.isOwn && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-[rgba(242,84,31,0.15)] text-[rgb(242,84,31)]">yours</span>
+                      <span className="text-xs px-2 py-0.5 rounded-lg bg-[rgba(242,84,31,0.1)] text-[rgb(242,84,31)] font-semibold">yours</span>
                     )}
                   </div>
-                  <div className="flex items-center gap-1 text-xs text-white/30">
-                    <svg className="w-3 h-3 text-yellow-500/60" fill="currentColor" viewBox="0 0 24 24">
+                  <div className="flex items-center gap-1.5 text-sm text-gray-400">
+                    <svg className="w-4 h-4 text-amber-400" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
                     </svg>
                     {skill.rating}
                   </div>
                 </div>
-                <p className="text-xs text-white/40 leading-relaxed mb-3">{skill.description}</p>
+                <p className="text-sm text-gray-500 leading-relaxed mb-4">{skill.description}</p>
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-white/30">{skill.category}</span>
-                  <div className="flex items-center gap-3 text-xs text-white/30">
+                  <span className="text-xs px-3 py-1 rounded-full bg-black/5 text-gray-500 font-medium">{skill.category}</span>
+                  <div className="flex items-center gap-3 text-sm text-gray-400">
                     <span>{skill.uses} uses</span>
                     <span>by {skill.author}</span>
                   </div>
@@ -205,9 +206,9 @@ export default function SkillsBoard({ onClose }: Props) {
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-white/5 flex items-center justify-between">
-          <span className="text-xs text-white/30">{filtered.length} skills</span>
-          <button className="btn-accent px-4 py-2 text-xs">
+        <div className="p-5 border-t border-black/5 flex items-center justify-between">
+          <span className="text-sm text-gray-400 font-medium">{filtered.length} skills</span>
+          <button className="btn-accent px-5 py-3 text-sm">
             + Create Skill
           </button>
         </div>

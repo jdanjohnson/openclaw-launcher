@@ -61,50 +61,50 @@ export default function ChatPanel({ agentName, onClose, onMoodChange }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-2xl h-[85vh] glass rounded-2xl flex flex-col animate-scale-in overflow-hidden">
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-6">
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative z-10 w-full max-w-2xl h-[85vh] glass rounded-3xl flex flex-col animate-scale-in overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[rgb(242,84,31)] to-[rgb(200,50,10)] flex items-center justify-center shadow-[0_0_15px_rgba(242,84,31,0.3)]">
-              <span className="text-sm">{"\uD83E\uDD9E"}</span>
+        <div className="flex items-center justify-between px-6 py-5 border-b border-black/5">
+          <div className="flex items-center gap-4">
+            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[rgb(242,84,31)] to-[rgb(200,50,10)] flex items-center justify-center shadow-[0_0_20px_rgba(242,84,31,0.2)]">
+              <span className="text-lg">{"\uD83E\uDD9E"}</span>
             </div>
             <div>
-              <span className="font-semibold text-white text-sm">{agentName}</span>
-              <div className="flex items-center gap-1.5">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-[10px] text-white/40">Online</span>
+              <span className="font-bold text-gray-900 text-base">{agentName}</span>
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-xs text-gray-400">Online</span>
               </div>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors"
+            className="w-10 h-10 rounded-xl bg-black/5 hover:bg-black/10 flex items-center justify-center transition-colors"
           >
-            <svg className="w-4 h-4 text-white/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3 glass-scroll">
+        <div className="flex-1 overflow-y-auto p-5 space-y-4 glass-scroll">
           {messages.map((msg, i) => (
             <div
               key={i}
               className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
             >
               <div
-                className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+                className={`max-w-[80%] rounded-2xl px-5 py-4 text-base leading-relaxed ${
                   msg.role === "user"
-                    ? "bg-[rgb(242,84,31)] text-white rounded-br-md"
-                    : "bg-white/[0.06] border border-white/5 text-white/90 rounded-bl-md"
+                    ? "bg-[rgb(242,84,31)] text-white rounded-br-lg shadow-[0_4px_20px_rgba(242,84,31,0.2)]"
+                    : "bg-white/60 border border-white/70 text-gray-700 rounded-bl-lg shadow-sm"
                 }`}
               >
                 <p className="whitespace-pre-wrap">{msg.text}</p>
                 {msg.provider && msg.role === "agent" && (
-                  <div className="flex items-center gap-1.5 mt-2 text-[10px] text-white/30">
+                  <div className="flex items-center gap-2 mt-2 text-xs text-gray-400">
                     <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
                     </svg>
@@ -127,12 +127,12 @@ export default function ChatPanel({ agentName, onClose, onMoodChange }: Props) {
 
           {sending && (
             <div className="flex justify-start">
-              <div className="bg-white/[0.06] border border-white/5 rounded-2xl rounded-bl-md px-4 py-3">
-                <div className="flex gap-1.5">
+              <div className="bg-white/60 border border-white/70 rounded-2xl rounded-bl-lg px-5 py-4 shadow-sm">
+                <div className="flex gap-2">
                   {[0, 1, 2].map((i) => (
                     <div
                       key={i}
-                      className="w-1.5 h-1.5 rounded-full bg-[rgb(242,84,31)] animate-bounce"
+                      className="w-2.5 h-2.5 rounded-full bg-[rgb(242,84,31)] animate-bounce"
                       style={{ animationDelay: `${i * 150}ms` }}
                     />
                   ))}
@@ -145,8 +145,8 @@ export default function ChatPanel({ agentName, onClose, onMoodChange }: Props) {
         </div>
 
         {/* Input */}
-        <div className="p-4 border-t border-white/5">
-          <div className="flex gap-2">
+        <div className="p-5 border-t border-black/5">
+          <div className="flex gap-3">
             <input
               type="text"
               value={input}
@@ -155,14 +155,14 @@ export default function ChatPanel({ agentName, onClose, onMoodChange }: Props) {
               placeholder={`Message ${agentName}...`}
               disabled={sending}
               autoFocus
-              className="flex-1 glass-input px-4 py-3 text-sm"
+              className="flex-1 glass-input px-5 py-4 text-base"
             />
             <button
               onClick={handleSend}
               disabled={!input.trim() || sending}
-              className="btn-accent px-4 py-3 disabled:opacity-30"
+              className="btn-accent px-5 py-4 disabled:opacity-30"
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
               </svg>
             </button>

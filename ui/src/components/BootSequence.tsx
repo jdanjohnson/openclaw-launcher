@@ -20,18 +20,18 @@ export default function BootSequence({ onComplete }: Props) {
   }, []);
 
   return (
-    <div className="fixed inset-0 bg-black flex items-center justify-center z-50 overflow-hidden">
+    <div className="fixed inset-0 bg-mesh flex items-center justify-center z-50 overflow-hidden">
       {/* Ambient glow */}
       <div
-        className="absolute w-[600px] h-[600px] rounded-full transition-all duration-1000"
+        className="absolute w-[700px] h-[700px] rounded-full transition-all duration-1000"
         style={{
-          background: "radial-gradient(circle, rgba(242,84,31,0.15) 0%, transparent 70%)",
+          background: "radial-gradient(circle, rgba(242,84,31,0.12) 0%, transparent 70%)",
           opacity: phase >= 1 ? 1 : 0,
           transform: phase >= 2 ? "scale(1.5)" : "scale(0.5)",
         }}
       />
 
-      <div className="flex flex-col items-center gap-6 relative z-10">
+      <div className="flex flex-col items-center gap-8 relative z-10">
         {/* Logo */}
         <div
           className="transition-all duration-700 ease-out"
@@ -40,8 +40,8 @@ export default function BootSequence({ onComplete }: Props) {
             transform: phase >= 1 ? "scale(1) translateY(0)" : "scale(0.5) translateY(20px)",
           }}
         >
-          <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-[rgb(242,84,31)] to-[rgb(200,50,10)] flex items-center justify-center shadow-[0_0_60px_rgba(242,84,31,0.4)] transition-shadow duration-1000">
-            <span className="text-4xl">🦞</span>
+          <div className="w-32 h-32 rounded-[32px] bg-gradient-to-br from-[rgb(242,84,31)] to-[rgb(200,50,10)] flex items-center justify-center shadow-[0_0_80px_rgba(242,84,31,0.3)] transition-shadow duration-1000">
+            <span className="text-6xl">🦞</span>
           </div>
         </div>
 
@@ -53,13 +53,13 @@ export default function BootSequence({ onComplete }: Props) {
             transform: phase >= 2 ? "translateY(0)" : "translateY(10px)",
           }}
         >
-          <h1 className="text-2xl font-bold text-white tracking-tight">Atomic Claw</h1>
-          <p className="text-xs text-white/40 mt-1 tracking-widest uppercase">Agent Operating System</p>
+          <h1 className="text-4xl font-black text-gray-900 tracking-tight">Atomic Claw</h1>
+          <p className="text-sm text-gray-400 mt-2 tracking-widest uppercase font-medium">Agent Operating System</p>
         </div>
 
         {/* Loading bar */}
         <div
-          className="w-48 h-0.5 bg-white/10 rounded-full overflow-hidden transition-opacity duration-300"
+          className="w-64 h-1.5 bg-black/5 rounded-full overflow-hidden transition-opacity duration-300"
           style={{ opacity: phase >= 2 ? 1 : 0 }}
         >
           <div
