@@ -278,7 +278,7 @@ cat > "$AUTOSTART_DIR/openclaw-kiosk.desktop" << DESKEOF
 [Desktop Entry]
 Type=Application
 Name=OpenClaw Kiosk
-Comment=Open Stationed Agents in fullscreen on boot
+Comment=Open Atomic Claw in fullscreen on boot
 Exec=$KIOSK_SCRIPT
 X-GNOME-Autostart-enabled=true
 X-MATE-Autostart-enabled=true

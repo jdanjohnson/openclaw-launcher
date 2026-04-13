@@ -32,7 +32,7 @@ export default function QuickOnboarding({ onComplete }: Props) {
               <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center mb-4 shadow-lg shadow-orange-500/20">
                 <Sparkles className="w-8 h-8 text-white" />
               </div>
-              <h1 className="text-2xl font-bold text-zinc-100">Welcome to Stationed Agents</h1>
+              <h1 className="text-2xl font-bold text-zinc-100">Welcome to Atomic Claw</h1>
               <p className="text-zinc-400 mt-2 text-sm">Your personal AI lives here. Powered by {"\uD83E\uDD9E"}OpenClaw.</p>
             </div>
 

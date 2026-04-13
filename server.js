@@ -285,11 +285,11 @@ function gatewayChatSend(message, timeoutMs = 120000) {
           type: "req", id: `connect-${reqId}`, method: "connect",
           params: {
             minProtocol: 3, maxProtocol: 3,
-            client: { id: "stationed-launcher", version: "1.0.0", platform: "pi", mode: "webchat" },
+            client: { id: "atomic-claw-launcher", version: "1.0.0", platform: "pi", mode: "webchat" },
             role: "operator",
             scopes: ["operator.admin"],
             caps: [],
-            userAgent: "stationed-launcher/1.0.0",
+            userAgent: "atomic-claw-launcher/1.0.0",
             locale: "en-US",
           },
         }));
